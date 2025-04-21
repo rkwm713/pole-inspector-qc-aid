@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +11,8 @@ interface ResultsProps {
 }
 
 export function Results({ poles, validationResults }: ResultsProps) {
+  console.log('Results component received poles:', poles);
+  
   const [selectedPoleId, setSelectedPoleId] = useState<string | undefined>(
     poles.length > 0 ? poles[0].structureId : undefined
   );

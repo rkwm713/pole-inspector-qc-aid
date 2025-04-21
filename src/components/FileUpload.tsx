@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +29,7 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
+      console.log('Parsed JSON data:', data);
       onFileLoaded(data);
     } catch (err) {
       setError("Failed to parse the JSON file. Please check the file format.");
