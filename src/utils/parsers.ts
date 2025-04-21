@@ -1,4 +1,3 @@
-
 // SPIDAcalc JSON Parser Utilities
 import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location, Design } from "@/types";
 
@@ -31,15 +30,42 @@ export const metersToFeetInches = (meters: number): string => {
  * @returns Array of extracted pole objects
  */
 export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
+  console.log("Processing JSON data:", jsonData);
+
   // First check if the data contains pre-processed poles
   if (jsonData.poles && Array.isArray(jsonData.poles)) {
     console.log("Found pre-processed poles array", jsonData.poles.length);
     return jsonData.poles;
   }
 
-  // Otherwise, extract from locations
+  // Check for clientData.poles
+  if (jsonData.clientData?.poles && Array.isArray(jsonData.clientData.poles)) {
+    console.log("Found poles in clientData", jsonData.clientData.poles.length);
+    return jsonData.clientData.poles.map((clientPole, index) => {
+      const pole: Pole = {
+        structureId: `P${String(index + 1).padStart(3, '0')}`,
+        alias: clientPole.aliases?.[0]?.id || undefined,
+        layers: {
+          EXISTING: {
+            layerName: 'EXISTING',
+            layerType: 'Measured',
+            attachments: [],
+            poleDetails: {
+              owner: 'Unknown',
+              poleType: clientPole.species,
+              glc: 0, // Default value
+              agl: clientPole.height.value
+            }
+          }
+        }
+      };
+      return pole;
+    });
+  }
+
+  // Check for locations array
   if (!jsonData.locations || !Array.isArray(jsonData.locations)) {
-    console.log("Invalid JSON structure. Expected locations array", jsonData);
+    console.log("No valid pole data found in the JSON structure", jsonData);
     return [];
   }
 

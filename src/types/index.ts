@@ -1,4 +1,3 @@
-
 // SPIDAcalc Data Types
 
 export interface PoleAttachment {
@@ -94,8 +93,50 @@ export interface Pole {
   layers: Record<string, PoleLayer>;
 }
 
+export interface ClientPole {
+  aliases: Array<{ id: string }>;
+  shape: string;
+  materialCategory: string;
+  classOfPole: string;
+  species: string;
+  height: {
+    unit: string;
+    value: number;
+  };
+  taper: number;
+  density: {
+    unit: string;
+    value: number;
+  };
+}
+
+export interface ClientData {
+  schema: string;
+  version: number;
+  name: string;
+  poles: ClientPole[];
+}
+
 // Raw JSON structure for SPIDAcalc data
 export interface SPIDAcalcData {
   locations?: Location[];
   poles?: Pole[];
+  clientData?: ClientData;
+  label?: string;
+  dateModified?: number;
+  clientFile?: string;
+  date?: string;
+  schema?: string;
+  version?: number;
+  engineer?: string;
+  comments?: string;
+  generalLocation?: string;
+  address?: {
+    number: string;
+    street: string;
+    city: string;
+    county: string;
+    state: string;
+    zip_code: string;
+  };
 }
