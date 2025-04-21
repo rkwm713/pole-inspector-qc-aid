@@ -30,72 +30,86 @@ export const metersToFeetInches = (meters: number): string => {
  * @returns Array of extracted pole objects
  */
 export const extractPoleData = (jsonData: any): Pole[] => {
-  if (!jsonData || !jsonData.poles || !Array.isArray(jsonData.poles)) {
-    console.log("Invalid JSON structure. Expected poles array", jsonData);
+  if (!jsonData || !jsonData.locations || !Array.isArray(jsonData.locations)) {
+    console.log("Invalid JSON structure. Expected locations array", jsonData);
     return [];
   }
 
   const poles: Pole[] = [];
   
-  // Process each pole directly from the poles array
-  jsonData.poles.forEach((pole: any) => {
-    if (!pole || !pole.structureId) {
-      console.log("Invalid pole data, missing structureId", pole);
+  jsonData.locations.forEach((location: Location) => {
+    if (!location.label || !location.designs || !Array.isArray(location.designs)) {
+      console.log("Invalid location data", location);
       return;
     }
-    
-    // Extract coordinates if available
-    let coordinates;
-    if (pole.location && 
-        typeof pole.location.latitude === 'number' && 
-        typeof pole.location.longitude === 'number') {
-      coordinates = {
-        latitude: pole.location.latitude,
-        longitude: pole.location.longitude
-      };
-    }
-    
-    // Process layers and their attachments
-    const layers: Record<string, PoleLayer> = {};
-    
-    if (pole.layers && typeof pole.layers === 'object') {
-      Object.entries(pole.layers).forEach(([layerName, layerData]: [string, any]) => {
-        const attachments: PoleAttachment[] = [];
-        
-        if (layerData.attachments && Array.isArray(layerData.attachments)) {
-          layerData.attachments.forEach((item: any) => {
-            if (!item) return;
-            
-            attachments.push({
-              id: item.id || `attachment-${Math.random().toString(36).substr(2, 9)}`,
-              description: String(item.description || 'Unknown Attachment'),
-              owner: String(item.owner || 'Unknown'),
-              height: {
-                value: Number(item.height?.value) || 0,
-                unit: String(item.height?.unit || 'METRE')
-              },
-              assemblyUnit: String(item.assemblyUnit || 'N/A')
-            });
-          });
+
+    // Process each design (usually just one per location)
+    location.designs.forEach((design: Design) => {
+      if (!design.structure?.pole) {
+        console.log("Invalid design structure", design);
+        return;
+      }
+
+      // Extract coordinates
+      let coordinates;
+      if (location.geographicCoordinate?.coordinates) {
+        const [longitude, latitude] = location.geographicCoordinate.coordinates;
+        coordinates = { latitude, longitude };
+      }
+
+      // Process attachments from different sources
+      const layers: Record<string, PoleLayer> = {
+        EXISTING: {
+          layerName: 'EXISTING',
+          layerType: 'Measured',
+          attachments: []
         }
-        
-        layers[layerName] = {
-          layerName,
-          layerType: 'Theoretical', // Default value as per type definition
-          attachments
-        };
+      };
+
+      // Process wires as attachments
+      if (design.structure.wires) {
+        design.structure.wires.forEach((wire: Wire) => {
+          layers.EXISTING.attachments.push({
+            id: wire.id,
+            description: wire.description || `Wire ${wire.id}`,
+            owner: wire.owner || 'Unknown',
+            height: wire.attachmentHeight,
+            assemblyUnit: wire.id // Using wire ID as assembly unit for now
+          });
+        });
+      }
+
+      // Process remedies if available
+      if (location.remedies) {
+        if (!layers.REMEDY) {
+          layers.REMEDY = {
+            layerName: 'REMEDY',
+            layerType: 'Recommended',
+            attachments: []
+          };
+        }
+
+        location.remedies.forEach((remedy: Remedy, index: number) => {
+          layers.REMEDY.attachments.push({
+            id: `remedy-${index}`,
+            description: remedy.description,
+            owner: 'Unknown',
+            height: { value: 0, unit: 'METRE' }, // Default height for remedies
+            assemblyUnit: remedy.type || 'Unknown'
+          });
+        });
+      }
+
+      // Create pole object
+      poles.push({
+        structureId: location.label,
+        alias: design.structure.pole.externalId,
+        coordinates,
+        layers
       });
-    }
-    
-    // Create pole object with all extracted data
-    poles.push({
-      structureId: String(pole.structureId),
-      alias: pole.aliases?.[0] || undefined,
-      coordinates,
-      layers
     });
   });
-  
+
   console.log("Extracted poles:", poles);
   return poles;
 };

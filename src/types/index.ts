@@ -12,6 +12,47 @@ export interface PoleAttachment {
   isValid?: boolean;
 }
 
+export interface Wire {
+  id: string;
+  description?: string;
+  attachmentHeight: {
+    unit: string;
+    value: number;
+  };
+  owner?: string;
+}
+
+export interface Remedy {
+  description: string;
+  type: string;
+}
+
+export interface GeographicCoordinate {
+  type: string;
+  coordinates: [number, number]; // [longitude, latitude]
+}
+
+export interface Location {
+  label: string;
+  geographicCoordinate?: GeographicCoordinate;
+  designs: Design[];
+  remedies?: Remedy[];
+}
+
+export interface Design {
+  structure: {
+    pole: {
+      id: string;
+      externalId: string;
+    };
+    wires?: Wire[];
+    clearanceCases?: {
+      upperId: string;
+      lowerId: string;
+    }[];
+  };
+}
+
 export interface WireEndPoint {
   direction: string;
   distance: number;
