@@ -32,87 +32,133 @@ export const metersToFeetInches = (meters: number): string => {
  * @returns Array of extracted pole objects
  */
 export const extractPoleData = (jsonData: any): Pole[] => {
-  if (!jsonData || !jsonData.clientData || !jsonData.clientData.poles || !Array.isArray(jsonData.clientData.poles)) {
-    console.log("Invalid JSON structure. Expected clientData.poles array", jsonData);
+  if (!jsonData || !jsonData.leads || !Array.isArray(jsonData.leads)) {
+    console.log("Invalid JSON structure. Expected leads array", jsonData);
     return [];
   }
 
-  return jsonData.clientData.poles.map((pole: any, index: number) => {
-    // Extract coordinates if available
-    let coordinates;
-    if (pole.location && 
-        typeof pole.location.latitude === 'number' && 
-        typeof pole.location.longitude === 'number') {
-      coordinates = {
-        latitude: pole.location.latitude,
-        longitude: pole.location.longitude
-      };
+  const poles: Pole[] = [];
+  
+  // Iterate through leads
+  jsonData.leads.forEach((lead: any) => {
+    if (!lead.locations || !Array.isArray(lead.locations)) {
+      console.log("Invalid lead structure. Expected locations array", lead);
+      return;
     }
-
-    // Get alias if available - ensure it's a string
-    let alias;
-    if (pole.aliases && pole.aliases.length > 0) {
-      // Convert alias to string if it's not already
-      const rawAlias = pole.aliases[0];
-      alias = typeof rawAlias === 'string' ? rawAlias : 
-             (typeof rawAlias === 'object' ? JSON.stringify(rawAlias) : String(rawAlias));
-    }
-
-    // Process layers (EXISTING, PROPOSED, REMEDY)
-    const layers: Record<string, PoleLayer> = {};
     
-    if (pole.layers) {
-      Object.keys(pole.layers).forEach(layerName => {
-        const layerData = pole.layers[layerName];
-        
-        // Process attachments for this layer
-        const attachments: PoleAttachment[] = layerData.attachments?.map((attachment: any) => {
-          // Ensure description and owner are strings
-          const description = typeof attachment.description === 'string' ? 
-                             attachment.description : 
-                             (typeof attachment.description === 'object' ? 
-                              JSON.stringify(attachment.description) : 
-                              String(attachment.description || 'Unknown Attachment'));
-          
-          const owner = typeof attachment.owner === 'string' ? 
-                       attachment.owner : 
-                       (typeof attachment.owner === 'object' ? 
-                        JSON.stringify(attachment.owner) : 
-                        String(attachment.owner || 'Unknown'));
-          
-          const assemblyUnit = typeof attachment.assemblyUnit === 'string' ? 
-                              attachment.assemblyUnit : 
-                              (typeof attachment.assemblyUnit === 'object' ? 
-                               JSON.stringify(attachment.assemblyUnit) : 
-                               String(attachment.assemblyUnit || 'N/A'));
-
-          return {
-            id: attachment.id || `attachment-${Math.random().toString(36).substr(2, 9)}`,
-            description,
-            owner,
-            height: {
-              value: attachment.height?.value || 0,
-              unit: attachment.height?.unit || 'METRE'
-            },
-            assemblyUnit
-          };
-        }) || [];
-
-        layers[layerName] = {
-          layerName,
-          attachments
+    // Extract poles from locations within each lead
+    lead.locations.forEach((location: any) => {
+      if (!location) {
+        console.log("Invalid location data", location);
+        return;
+      }
+      
+      // Extract coordinates if available
+      let coordinates;
+      if (location.geographicCoordinate && 
+          typeof location.geographicCoordinate.latitude === 'number' && 
+          typeof location.geographicCoordinate.longitude === 'number') {
+        coordinates = {
+          latitude: location.geographicCoordinate.latitude,
+          longitude: location.geographicCoordinate.longitude
         };
+      }
+      
+      // Set structure ID from location label
+      const structureId = location.label || `unknown-${Math.random().toString(36).substring(2, 9)}`;
+      
+      // Use comments as alias if available
+      let alias = location.comments;
+      if (typeof alias !== 'string' && alias) {
+        alias = typeof alias === 'object' ? JSON.stringify(alias) : String(alias);
+      }
+      
+      // Process designs as layers (EXISTING, PROPOSED, REMEDY)
+      const layers: Record<string, PoleLayer> = {};
+      
+      if (location.designs && Array.isArray(location.designs)) {
+        location.designs.forEach((design: any) => {
+          const layerName = design.label || "UNKNOWN";
+          const attachments: PoleAttachment[] = [];
+          
+          // Process different types of attachments from the design
+          const attachmentTypes = [
+            { key: 'equipments', name: 'Equipment' },
+            { key: 'insulators', name: 'Insulator' },
+            { key: 'crossArms', name: 'Cross Arm' },
+            { key: 'sidewalkBraces', name: 'Sidewalk Brace' },
+            { key: 'anchors', name: 'Anchor' },
+            { key: 'guys', name: 'Guy' }
+          ];
+          
+          // Process each type of attachment
+          attachmentTypes.forEach(({ key, name }) => {
+            if (design[key] && Array.isArray(design[key])) {
+              design[key].forEach((item: any) => {
+                // Ensure description is a string
+                const description = item.type?.description || `${name}`;
+                const descString = typeof description === 'string' ? 
+                                  description : 
+                                  (typeof description === 'object' ? 
+                                   JSON.stringify(description) : 
+                                   String(description || `Unknown ${name}`));
+                
+                // Ensure owner is a string
+                const owner = item.owner || 'Unknown';
+                const ownerString = typeof owner === 'string' ? 
+                                   owner : 
+                                   (typeof owner === 'object' ? 
+                                    JSON.stringify(owner) : 
+                                    String(owner));
+                
+                // Get attachment height
+                const heightValue = item.attachHeight?.value || 
+                                   (item.height?.value) || 
+                                   0;
+                
+                // Get assembly unit if available
+                const assemblyUnit = item.externalId || item.clientItem?.species || 'N/A';
+                const assemblyUnitString = typeof assemblyUnit === 'string' ? 
+                                          assemblyUnit : 
+                                          (typeof assemblyUnit === 'object' ? 
+                                           JSON.stringify(assemblyUnit) : 
+                                           String(assemblyUnit));
+                
+                // Create attachment object
+                attachments.push({
+                  id: item.id || `${key}-${Math.random().toString(36).substr(2, 9)}`,
+                  description: descString,
+                  owner: ownerString,
+                  height: {
+                    value: heightValue,
+                    unit: item.attachHeight?.unit || item.height?.unit || 'METRE'
+                  },
+                  assemblyUnit: assemblyUnitString
+                });
+              });
+            }
+          });
+          
+          // Create layer with all attachments
+          layers[layerName] = {
+            layerName,
+            attachments
+          };
+        });
+      }
+      
+      // Create pole object with all extracted data
+      poles.push({
+        structureId,
+        alias,
+        id: location.id,
+        coordinates,
+        layers
       });
-    }
-
-    return {
-      structureId: pole.structureId || `pole-${index}`,
-      alias,
-      id: pole.id,
-      coordinates,
-      layers
-    };
+    });
   });
+  
+  return poles;
 };
 
 /**
