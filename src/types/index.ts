@@ -1,3 +1,4 @@
+
 // SPIDAcalc Data Types
 
 export interface PoleAttachment {
@@ -20,6 +21,37 @@ export interface Wire {
     value: number;
   };
   owner?: string;
+  clientItem?: string;
+}
+
+export interface Insulator {
+  id: string;
+  owner?: string;
+  clientItem?: string;
+  offset?: {
+    unit: string;
+    value: number;
+  };
+}
+
+export interface Equipment {
+  id: string;
+  owner?: string;
+  clientItem?: string;
+  attachmentHeight?: {
+    unit: string;
+    value: number;
+  };
+}
+
+export interface Guy {
+  id: string;
+  owner?: string;
+  clientItem?: string;
+  attachmentHeight?: {
+    unit: string;
+    value: number;
+  };
 }
 
 export interface Remedy {
@@ -46,6 +78,9 @@ export interface Design {
       externalId: string;
     };
     wires?: Wire[];
+    insulators?: Insulator[];
+    equipments?: Equipment[];
+    guys?: Guy[];
     clearanceCases?: {
       upperId: string;
       lowerId: string;
@@ -117,10 +152,16 @@ export interface ClientData {
   poles: ClientPole[];
 }
 
+export interface Lead {
+  label?: string;
+  locations: Location[];
+}
+
 // Raw JSON structure for SPIDAcalc data
 export interface SPIDAcalcData {
   locations?: Location[];
   poles?: Pole[];
+  leads?: Lead[];
   clientData?: ClientData;
   label?: string;
   dateModified?: number;

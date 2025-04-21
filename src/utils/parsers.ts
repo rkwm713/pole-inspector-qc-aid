@@ -1,5 +1,6 @@
+
 // SPIDAcalc JSON Parser Utilities
-import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location, Design } from "@/types";
+import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location, Design, Insulator, Equipment, Guy, Lead } from "@/types";
 
 /**
  * Convert meters to feet and inches
@@ -25,6 +26,73 @@ export const metersToFeetInches = (meters: number): string => {
 };
 
 /**
+ * Convert Wire objects to PoleAttachment objects
+ */
+const wireToAttachment = (wire: Wire): PoleAttachment => {
+  return {
+    id: wire.id,
+    description: wire.description || `Wire ${wire.id}`,
+    owner: wire.owner || 'Unknown',
+    height: wire.attachmentHeight,
+    assemblyUnit: wire.clientItem || wire.id
+  };
+};
+
+/**
+ * Convert Insulator objects to PoleAttachment objects
+ */
+const insulatorToAttachment = (insulator: Insulator): PoleAttachment | null => {
+  if (!insulator.offset) {
+    console.log(`Insulator ${insulator.id} missing offset/height information`);
+    return null;
+  }
+  
+  return {
+    id: insulator.id,
+    description: `Insulator ${insulator.id}`,
+    owner: insulator.owner || 'Unknown',
+    height: insulator.offset,
+    assemblyUnit: insulator.clientItem || insulator.id
+  };
+};
+
+/**
+ * Convert Equipment objects to PoleAttachment objects
+ */
+const equipmentToAttachment = (equipment: Equipment): PoleAttachment | null => {
+  if (!equipment.attachmentHeight) {
+    console.log(`Equipment ${equipment.id} missing attachmentHeight information`);
+    return null;
+  }
+  
+  return {
+    id: equipment.id,
+    description: `Equipment ${equipment.id}`,
+    owner: equipment.owner || 'Unknown',
+    height: equipment.attachmentHeight,
+    assemblyUnit: equipment.clientItem || equipment.id
+  };
+};
+
+/**
+ * Convert Guy objects to PoleAttachment objects
+ */
+const guyToAttachment = (guy: Guy): PoleAttachment | null => {
+  if (!guy.attachmentHeight) {
+    console.log(`Guy ${guy.id} missing attachmentHeight information`);
+    return null;
+  }
+  
+  return {
+    id: guy.id,
+    description: `Guy ${guy.id}`,
+    owner: guy.owner || 'Unknown',
+    height: guy.attachmentHeight,
+    assemblyUnit: guy.clientItem || guy.id
+  };
+};
+
+/**
  * Extract pole data from SPIDAcalc JSON
  * @param jsonData The parsed JSON data
  * @returns Array of extracted pole objects
@@ -32,7 +100,142 @@ export const metersToFeetInches = (meters: number): string => {
 export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
   console.log("Processing JSON data:", jsonData);
 
-  // First check if the data contains pre-processed poles
+  // Check for leads array format first (newer format)
+  if (jsonData.leads && Array.isArray(jsonData.leads) && jsonData.leads.length > 0) {
+    console.log("Found leads array format", jsonData.leads.length);
+    const poles: Pole[] = [];
+    
+    jsonData.leads.forEach((lead, leadIndex) => {
+      console.log(`Processing lead ${leadIndex}`, lead);
+      
+      if (!lead.locations || !Array.isArray(lead.locations)) {
+        console.log(`Lead ${leadIndex} has no valid locations array`);
+        return;
+      }
+      
+      lead.locations.forEach((location, locationIndex) => {
+        console.log(`Processing location ${locationIndex} in lead ${leadIndex}`, location);
+        
+        if (!location.designs || !Array.isArray(location.designs) || location.designs.length === 0) {
+          console.log(`Location ${location.label || locationIndex} has no valid designs`);
+          return;
+        }
+        
+        // Process each design (usually just one per location)
+        location.designs.forEach((design, designIndex) => {
+          if (!design.structure?.pole) {
+            console.log(`Invalid design structure at index ${designIndex}`);
+            return;
+          }
+          
+          // Extract coordinates
+          let coordinates;
+          if (location.geographicCoordinate?.coordinates) {
+            try {
+              const [longitude, latitude] = location.geographicCoordinate.coordinates;
+              coordinates = { latitude, longitude };
+              console.log(`Extracted coordinates: ${latitude}, ${longitude}`);
+            } catch (e) {
+              console.error("Failed to parse coordinates:", e);
+            }
+          }
+          
+          // Create the default layer structure
+          const layers: Record<string, PoleLayer> = {
+            EXISTING: {
+              layerName: 'EXISTING',
+              layerType: 'Measured',
+              attachments: []
+            }
+          };
+          
+          // Process all attachment types
+          try {
+            // Process wires
+            if (design.structure.wires && Array.isArray(design.structure.wires)) {
+              design.structure.wires.forEach(wire => {
+                layers.EXISTING.attachments.push(wireToAttachment(wire));
+              });
+              console.log(`Processed ${design.structure.wires.length} wires`);
+            }
+            
+            // Process insulators
+            if (design.structure.insulators && Array.isArray(design.structure.insulators)) {
+              design.structure.insulators.forEach(insulator => {
+                const attachment = insulatorToAttachment(insulator);
+                if (attachment) {
+                  layers.EXISTING.attachments.push(attachment);
+                }
+              });
+              console.log(`Processed ${design.structure.insulators.length} insulators`);
+            }
+            
+            // Process equipment
+            if (design.structure.equipments && Array.isArray(design.structure.equipments)) {
+              design.structure.equipments.forEach(equipment => {
+                const attachment = equipmentToAttachment(equipment);
+                if (attachment) {
+                  layers.EXISTING.attachments.push(attachment);
+                }
+              });
+              console.log(`Processed ${design.structure.equipments.length} equipment items`);
+            }
+            
+            // Process guys
+            if (design.structure.guys && Array.isArray(design.structure.guys)) {
+              design.structure.guys.forEach(guy => {
+                const attachment = guyToAttachment(guy);
+                if (attachment) {
+                  layers.EXISTING.attachments.push(attachment);
+                }
+              });
+              console.log(`Processed ${design.structure.guys.length} guys`);
+            }
+          } catch (e) {
+            console.error("Error processing attachments:", e);
+          }
+          
+          // Process remedies if available
+          if (location.remedies && Array.isArray(location.remedies) && location.remedies.length > 0) {
+            if (!layers.REMEDY) {
+              layers.REMEDY = {
+                layerName: 'REMEDY',
+                layerType: 'Recommended',
+                attachments: []
+              };
+            }
+            
+            location.remedies.forEach((remedy: Remedy, index: number) => {
+              layers.REMEDY.attachments.push({
+                id: `remedy-${index}`,
+                description: remedy.description,
+                owner: 'Unknown',
+                height: { value: 0, unit: 'METRE' },
+                assemblyUnit: remedy.type || 'Unknown'
+              });
+            });
+            console.log(`Processed ${location.remedies.length} remedies`);
+          }
+          
+          // Create pole object using location label as structureId
+          const pole: Pole = {
+            structureId: location.label || `Pole-${leadIndex}-${locationIndex}`,
+            alias: design.structure.pole.externalId,
+            coordinates,
+            layers
+          };
+          
+          poles.push(pole);
+          console.log(`Added pole with ID ${pole.structureId}`);
+        });
+      });
+    });
+    
+    console.log(`Extracted ${poles.length} poles from leads data`);
+    return poles;
+  }
+  
+  // Check if the data contains pre-processed poles
   if (jsonData.poles && Array.isArray(jsonData.poles)) {
     console.log("Found pre-processed poles array", jsonData.poles.length);
     return jsonData.poles;
