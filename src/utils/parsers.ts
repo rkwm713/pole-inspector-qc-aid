@@ -49,10 +49,14 @@ export const extractPoleData = (jsonData: any): Pole[] => {
       };
     }
 
-    // Get alias if available
-    const alias = pole.aliases && pole.aliases.length > 0 
-      ? pole.aliases[0] 
-      : undefined;
+    // Get alias if available - ensure it's a string
+    let alias;
+    if (pole.aliases && pole.aliases.length > 0) {
+      // Convert alias to string if it's not already
+      const rawAlias = pole.aliases[0];
+      alias = typeof rawAlias === 'string' ? rawAlias : 
+             (typeof rawAlias === 'object' ? JSON.stringify(rawAlias) : String(rawAlias));
+    }
 
     // Process layers (EXISTING, PROPOSED, REMEDY)
     const layers: Record<string, PoleLayer> = {};
@@ -62,16 +66,37 @@ export const extractPoleData = (jsonData: any): Pole[] => {
         const layerData = pole.layers[layerName];
         
         // Process attachments for this layer
-        const attachments: PoleAttachment[] = layerData.attachments?.map((attachment: any) => ({
-          id: attachment.id || `attachment-${Math.random().toString(36).substr(2, 9)}`,
-          description: attachment.description || 'Unknown Attachment',
-          owner: attachment.owner || 'Unknown',
-          height: {
-            value: attachment.height?.value || 0,
-            unit: attachment.height?.unit || 'METRE'
-          },
-          assemblyUnit: attachment.assemblyUnit || 'N/A'
-        })) || [];
+        const attachments: PoleAttachment[] = layerData.attachments?.map((attachment: any) => {
+          // Ensure description and owner are strings
+          const description = typeof attachment.description === 'string' ? 
+                             attachment.description : 
+                             (typeof attachment.description === 'object' ? 
+                              JSON.stringify(attachment.description) : 
+                              String(attachment.description || 'Unknown Attachment'));
+          
+          const owner = typeof attachment.owner === 'string' ? 
+                       attachment.owner : 
+                       (typeof attachment.owner === 'object' ? 
+                        JSON.stringify(attachment.owner) : 
+                        String(attachment.owner || 'Unknown'));
+          
+          const assemblyUnit = typeof attachment.assemblyUnit === 'string' ? 
+                              attachment.assemblyUnit : 
+                              (typeof attachment.assemblyUnit === 'object' ? 
+                               JSON.stringify(attachment.assemblyUnit) : 
+                               String(attachment.assemblyUnit || 'N/A'));
+
+          return {
+            id: attachment.id || `attachment-${Math.random().toString(36).substr(2, 9)}`,
+            description,
+            owner,
+            height: {
+              value: attachment.height?.value || 0,
+              unit: attachment.height?.unit || 'METRE'
+            },
+            assemblyUnit
+          };
+        }) || [];
 
         layers[layerName] = {
           layerName,

@@ -49,7 +49,7 @@ export function Results({ poles, validationResults }: ResultsProps) {
                     <div className="font-medium">{pole.structureId}</div>
                     {pole.alias && (
                       <div className="text-sm text-muted-foreground">
-                        Alias: {pole.alias}
+                        Alias: {typeof pole.alias === 'string' ? pole.alias : JSON.stringify(pole.alias)}
                       </div>
                     )}
                   </div>
