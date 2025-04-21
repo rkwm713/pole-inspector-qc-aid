@@ -1,5 +1,5 @@
 // SPIDAcalc JSON Parser Utilities
-import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint } from "@/types";
+import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location } from "@/types";
 
 /**
  * Convert meters to feet and inches
@@ -29,8 +29,15 @@ export const metersToFeetInches = (meters: number): string => {
  * @param jsonData The parsed JSON data
  * @returns Array of extracted pole objects
  */
-export const extractPoleData = (jsonData: any): Pole[] => {
-  if (!jsonData || !jsonData.locations || !Array.isArray(jsonData.locations)) {
+export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
+  // First check if the data contains pre-processed poles
+  if (jsonData.poles && Array.isArray(jsonData.poles)) {
+    console.log("Found pre-processed poles array", jsonData.poles.length);
+    return jsonData.poles;
+  }
+
+  // Otherwise, extract from locations
+  if (!jsonData.locations || !Array.isArray(jsonData.locations)) {
     console.log("Invalid JSON structure. Expected locations array", jsonData);
     return [];
   }

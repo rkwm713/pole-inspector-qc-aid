@@ -1,3 +1,4 @@
+
 // SPIDAcalc Data Types
 
 export interface PoleAttachment {
@@ -91,4 +92,10 @@ export interface Pole {
     longitude: number;
   };
   layers: Record<string, PoleLayer>;
+}
+
+// Raw JSON structure for SPIDAcalc data
+export interface SPIDAcalcData {
+  locations?: Location[];
+  poles?: Pole[];
 }
