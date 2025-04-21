@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole } from "@/types";
@@ -8,9 +9,6 @@ interface PoleDetailsProps {
 }
 
 export function PoleDetails({ pole }: PoleDetailsProps) {
-  console.log('PoleDetails component received pole:', pole);
-  console.log('Available layers:', Object.keys(pole.layers));
-  
   // Sort layers to ensure consistent order (EXISTING, PROPOSED, REMEDY)
   const layerOrder = ["EXISTING", "PROPOSED", "REMEDY"];
   
