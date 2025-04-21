@@ -1,5 +1,4 @@
 // SPIDAcalc JSON Parser Utilities
-
 import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint } from "@/types";
 
 /**
@@ -31,141 +30,73 @@ export const metersToFeetInches = (meters: number): string => {
  * @returns Array of extracted pole objects
  */
 export const extractPoleData = (jsonData: any): Pole[] => {
-  if (!jsonData || !jsonData.leads || !Array.isArray(jsonData.leads)) {
-    console.log("Invalid JSON structure. Expected leads array", jsonData);
+  if (!jsonData || !jsonData.poles || !Array.isArray(jsonData.poles)) {
+    console.log("Invalid JSON structure. Expected poles array", jsonData);
     return [];
   }
 
   const poles: Pole[] = [];
   
-  // Iterate through leads
-  jsonData.leads.forEach((lead: any) => {
-    if (!lead.locations || !Array.isArray(lead.locations)) {
-      console.log("Invalid lead structure. Expected locations array", lead);
+  // Process each pole directly from the poles array
+  jsonData.poles.forEach((pole: any) => {
+    if (!pole || !pole.structureId) {
+      console.log("Invalid pole data, missing structureId", pole);
       return;
     }
     
-    // Extract poles from locations within each lead
-    lead.locations.forEach((location: any) => {
-      if (!location) {
-        console.log("Invalid location data", location);
-        return;
-      }
-      
-      // Extract coordinates if available
-      let coordinates;
-      if (location.geographicCoordinate && 
-          typeof location.geographicCoordinate.latitude === 'number' && 
-          typeof location.geographicCoordinate.longitude === 'number') {
-        coordinates = {
-          latitude: location.geographicCoordinate.latitude,
-          longitude: location.geographicCoordinate.longitude
-        };
-      }
-      
-      // Set structure ID from location label
-      const structureId = location.label || `unknown-${Math.random().toString(36).substring(2, 9)}`;
-      
-      // Use comments as alias if available
-      let alias = location.comments;
-      if (typeof alias !== 'string' && alias) {
-        alias = typeof alias === 'object' ? JSON.stringify(alias) : String(alias);
-      }
-      
-      // Process designs as layers
-      const layers: Record<string, PoleLayer> = {};
-      
-      if (location.designs && Array.isArray(location.designs)) {
-        location.designs.forEach((design: any) => {
-          const layerName = design.label || "UNKNOWN";
-          const attachments: PoleAttachment[] = [];
-          
-          // Extract pole details
-          const poleDetails: PoleDetails | undefined = design.pole ? {
-            owner: design.pole.owner || 'Unknown',
-            glc: design.pole.glc?.value,
-            agl: design.pole.agl?.value,
-            poleType: design.pole.clientItem?.species
-          } : undefined;
-
-          // Extract wire endpoints
-          const wireEndPoints: WireEndPoint[] = (design.wireEndPoints || []).map((endpoint: any) => ({
-            direction: endpoint.direction || 'Unknown',
-            distance: endpoint.distance?.value || 0,
-            wireType: endpoint.wireType?.description || 'Unknown',
-            connectionId: endpoint.connectionId
-          }));
-          
-          // Process different types of attachments
-          const attachmentTypes = [
-            { key: 'wires', name: 'Wire' },
-            { key: 'equipments', name: 'Equipment' },
-            { key: 'insulators', name: 'Insulator' },
-            { key: 'crossArms', name: 'Cross Arm' },
-            { key: 'sidewalkBraces', name: 'Sidewalk Brace' },
-            { key: 'anchors', name: 'Anchor' },
-            { key: 'guys', name: 'Guy' }
-          ];
-          
-          attachmentTypes.forEach(({ key, name }) => {
-            if (design[key] && Array.isArray(design[key])) {
-              design[key].forEach((item: any) => {
-                const description = item.type?.description || `${name}`;
-                const descString = typeof description === 'string' ? 
-                                  description : 
-                                  String(description || `Unknown ${name}`);
-                
-                const owner = item.owner || 'Unknown';
-                const ownerString = typeof owner === 'string' ? 
-                                   owner : 
-                                   String(owner);
-                
-                const heightValue = item.attachHeight?.value || 
-                                   (item.height?.value) || 
-                                   0;
-                
-                const assemblyUnit = item.externalId || 
-                                    item.clientItem?.species || 
-                                    'N/A';
-                
-                attachments.push({
-                  id: item.id || `${key}-${Math.random().toString(36).substr(2, 9)}`,
-                  description: descString,
-                  owner: ownerString,
-                  height: {
-                    value: heightValue,
-                    unit: item.attachHeight?.unit || item.height?.unit || 'METRE'
-                  },
-                  assemblyUnit: typeof assemblyUnit === 'string' ? 
-                               assemblyUnit : 
-                               String(assemblyUnit)
-                });
-              });
-            }
+    // Extract coordinates if available
+    let coordinates;
+    if (pole.location && 
+        typeof pole.location.latitude === 'number' && 
+        typeof pole.location.longitude === 'number') {
+      coordinates = {
+        latitude: pole.location.latitude,
+        longitude: pole.location.longitude
+      };
+    }
+    
+    // Process layers and their attachments
+    const layers: Record<string, PoleLayer> = {};
+    
+    if (pole.layers && typeof pole.layers === 'object') {
+      Object.entries(pole.layers).forEach(([layerName, layerData]: [string, any]) => {
+        const attachments: PoleAttachment[] = [];
+        
+        if (layerData.attachments && Array.isArray(layerData.attachments)) {
+          layerData.attachments.forEach((item: any) => {
+            if (!item) return;
+            
+            attachments.push({
+              id: item.id || `attachment-${Math.random().toString(36).substr(2, 9)}`,
+              description: String(item.description || 'Unknown Attachment'),
+              owner: String(item.owner || 'Unknown'),
+              height: {
+                value: Number(item.height?.value) || 0,
+                unit: String(item.height?.unit || 'METRE')
+              },
+              assemblyUnit: String(item.assemblyUnit || 'N/A')
+            });
           });
-          
-          // Create layer with all attachments and new fields
-          layers[layerName] = {
-            layerName,
-            layerType: design.layerType || 'Theoretical',
-            attachments,
-            wireEndPoints: wireEndPoints.length > 0 ? wireEndPoints : undefined,
-            poleDetails
-          };
-        });
-      }
-      
-      // Create pole object with all extracted data
-      poles.push({
-        structureId,
-        alias,
-        id: location.id,
-        coordinates,
-        layers
+        }
+        
+        layers[layerName] = {
+          layerName,
+          layerType: 'Theoretical', // Default value as per type definition
+          attachments
+        };
       });
+    }
+    
+    // Create pole object with all extracted data
+    poles.push({
+      structureId: String(pole.structureId),
+      alias: pole.aliases?.[0] || undefined,
+      coordinates,
+      layers
     });
   });
   
+  console.log("Extracted poles:", poles);
   return poles;
 };
 
