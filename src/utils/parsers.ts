@@ -1,5 +1,6 @@
+
 // SPIDAcalc JSON Parser Utilities
-import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location } from "@/types";
+import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location, Design } from "@/types";
 
 /**
  * Convert meters to feet and inches
