@@ -32,11 +32,12 @@ export const metersToFeetInches = (meters: number): string => {
  * @returns Array of extracted pole objects
  */
 export const extractPoleData = (jsonData: any): Pole[] => {
-  if (!jsonData || !jsonData.poles || !Array.isArray(jsonData.poles)) {
+  if (!jsonData || !jsonData.clientData || !jsonData.clientData.poles || !Array.isArray(jsonData.clientData.poles)) {
+    console.log("Invalid JSON structure. Expected clientData.poles array", jsonData);
     return [];
   }
 
-  return jsonData.poles.map((pole: any, index: number) => {
+  return jsonData.clientData.poles.map((pole: any, index: number) => {
     // Extract coordinates if available
     let coordinates;
     if (pole.location && 
