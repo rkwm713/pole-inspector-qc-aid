@@ -73,7 +73,7 @@ export const extractPoleData = (jsonData: any): Pole[] => {
         alias = typeof alias === 'object' ? JSON.stringify(alias) : String(alias);
       }
       
-      // Process designs as layers (EXISTING, PROPOSED, REMEDY)
+      // Process designs as layers
       const layers: Record<string, PoleLayer> = {};
       
       if (location.designs && Array.isArray(location.designs)) {
@@ -81,8 +81,25 @@ export const extractPoleData = (jsonData: any): Pole[] => {
           const layerName = design.label || "UNKNOWN";
           const attachments: PoleAttachment[] = [];
           
-          // Process different types of attachments from the design
+          // Extract pole details
+          const poleDetails: PoleDetails | undefined = design.pole ? {
+            owner: design.pole.owner || 'Unknown',
+            glc: design.pole.glc?.value,
+            agl: design.pole.agl?.value,
+            poleType: design.pole.clientItem?.species
+          } : undefined;
+
+          // Extract wire endpoints
+          const wireEndPoints: WireEndPoint[] = (design.wireEndPoints || []).map((endpoint: any) => ({
+            direction: endpoint.direction || 'Unknown',
+            distance: endpoint.distance?.value || 0,
+            wireType: endpoint.wireType?.description || 'Unknown',
+            connectionId: endpoint.connectionId
+          }));
+          
+          // Process different types of attachments
           const attachmentTypes = [
+            { key: 'wires', name: 'Wire' },
             { key: 'equipments', name: 'Equipment' },
             { key: 'insulators', name: 'Insulator' },
             { key: 'crossArms', name: 'Cross Arm' },
@@ -91,40 +108,27 @@ export const extractPoleData = (jsonData: any): Pole[] => {
             { key: 'guys', name: 'Guy' }
           ];
           
-          // Process each type of attachment
           attachmentTypes.forEach(({ key, name }) => {
             if (design[key] && Array.isArray(design[key])) {
               design[key].forEach((item: any) => {
-                // Ensure description is a string
                 const description = item.type?.description || `${name}`;
                 const descString = typeof description === 'string' ? 
                                   description : 
-                                  (typeof description === 'object' ? 
-                                   JSON.stringify(description) : 
-                                   String(description || `Unknown ${name}`));
+                                  String(description || `Unknown ${name}`);
                 
-                // Ensure owner is a string
                 const owner = item.owner || 'Unknown';
                 const ownerString = typeof owner === 'string' ? 
                                    owner : 
-                                   (typeof owner === 'object' ? 
-                                    JSON.stringify(owner) : 
-                                    String(owner));
+                                   String(owner);
                 
-                // Get attachment height
                 const heightValue = item.attachHeight?.value || 
                                    (item.height?.value) || 
                                    0;
                 
-                // Get assembly unit if available
-                const assemblyUnit = item.externalId || item.clientItem?.species || 'N/A';
-                const assemblyUnitString = typeof assemblyUnit === 'string' ? 
-                                          assemblyUnit : 
-                                          (typeof assemblyUnit === 'object' ? 
-                                           JSON.stringify(assemblyUnit) : 
-                                           String(assemblyUnit));
+                const assemblyUnit = item.externalId || 
+                                    item.clientItem?.species || 
+                                    'N/A';
                 
-                // Create attachment object
                 attachments.push({
                   id: item.id || `${key}-${Math.random().toString(36).substr(2, 9)}`,
                   description: descString,
@@ -133,16 +137,21 @@ export const extractPoleData = (jsonData: any): Pole[] => {
                     value: heightValue,
                     unit: item.attachHeight?.unit || item.height?.unit || 'METRE'
                   },
-                  assemblyUnit: assemblyUnitString
+                  assemblyUnit: typeof assemblyUnit === 'string' ? 
+                               assemblyUnit : 
+                               String(assemblyUnit)
                 });
               });
             }
           });
           
-          // Create layer with all attachments
+          // Create layer with all attachments and new fields
           layers[layerName] = {
             layerName,
-            attachments
+            layerType: design.layerType || 'Theoretical',
+            attachments,
+            wireEndPoints: wireEndPoints.length > 0 ? wireEndPoints : undefined,
+            poleDetails
           };
         });
       }
