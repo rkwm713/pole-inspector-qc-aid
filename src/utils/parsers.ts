@@ -1,5 +1,7 @@
+
 // SPIDAcalc JSON Parser Utilities
 import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint } from "@/types";
+import { safeDisplayValue } from "./formatting";
 
 /**
  * Convert meters to feet and inches
@@ -22,6 +24,21 @@ export const metersToFeetInches = (meters: number): string => {
   }
   
   return `${feet}' ${inches}"`;
+};
+
+/**
+ * Ensures a value is a string
+ * @param value Any value that might need to be converted to string
+ * @returns String representation of the value
+ */
+const ensureString = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'object') {
+    return safeDisplayValue(value);
+  }
+  return String(value);
 };
 
 export const extractPoleData = (jsonData: any): Pole[] => {
@@ -54,11 +71,12 @@ export const extractPoleData = (jsonData: any): Pole[] => {
       };
     }
     
-    // Set structure ID
-    const structureId = pole.structureId || `unknown-${Math.random().toString(36).substring(2, 9)}`;
+    // Set structure ID and ensure it's a string
+    const structureId = pole.structureId ? ensureString(pole.structureId) : 
+      `unknown-${Math.random().toString(36).substring(2, 9)}`;
     
-    // Use aliases as alias if available
-    const alias = Array.isArray(pole.aliases) ? pole.aliases[0] : undefined;
+    // Use aliases as alias if available and ensure it's a string
+    const alias = Array.isArray(pole.aliases) ? ensureString(pole.aliases[0]) : undefined;
     
     // Process layers
     const layers: Record<string, PoleLayer> = {};
@@ -76,14 +94,15 @@ export const extractPoleData = (jsonData: any): Pole[] => {
             if (!attachment) return;
             
             attachments.push({
-              id: attachment.id || `att-${Math.random().toString(36).substr(2, 9)}`,
-              description: attachment.description || 'Unknown Attachment',
-              owner: attachment.owner || 'Unknown',
+              id: attachment.id ? ensureString(attachment.id) : 
+                `att-${Math.random().toString(36).substr(2, 9)}`,
+              description: ensureString(attachment.description || 'Unknown Attachment'),
+              owner: ensureString(attachment.owner || 'Unknown'),
               height: {
                 value: attachment.height?.value || 0,
-                unit: attachment.height?.unit || 'METRE'
+                unit: ensureString(attachment.height?.unit || 'METRE')
               },
-              assemblyUnit: attachment.assemblyUnit || 'N/A'
+              assemblyUnit: ensureString(attachment.assemblyUnit || 'N/A')
             });
           });
         }
@@ -128,7 +147,9 @@ export const validatePoleData = (poles: Pole[]): Pole[] => {
       
       layer.attachments = layer.attachments.map(attachment => {
         // Example validation: check if assemblyUnit exists
-        const isValid = attachment.assemblyUnit !== 'N/A' && 
+        const isValid = attachment.assemblyUnit && 
+                        typeof attachment.assemblyUnit === 'string' && 
+                        attachment.assemblyUnit !== 'N/A' && 
                         attachment.assemblyUnit.trim().length > 0;
         
         return {

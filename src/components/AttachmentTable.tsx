@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PoleAttachment } from "@/types";
 import { metersToFeetInches } from "@/utils/parsers";
+import { safeDisplayValue } from "@/utils/formatting";
 import { Check, X } from "lucide-react";
 
 interface AttachmentTableProps {
@@ -48,15 +49,15 @@ export function AttachmentTable({ attachments, layerName }: AttachmentTableProps
           <TableBody>
             {attachments.map((attachment, index) => (
               <TableRow key={attachment.id || index}>
-                <TableCell className="font-medium">{attachment.description}</TableCell>
-                <TableCell>{attachment.owner}</TableCell>
+                <TableCell className="font-medium">{safeDisplayValue(attachment.description)}</TableCell>
+                <TableCell>{safeDisplayValue(attachment.owner)}</TableCell>
                 <TableCell>
                   {metersToFeetInches(attachment.height.value)}
                   <span className="text-xs text-muted-foreground ml-1">
                     ({attachment.height.value.toFixed(2)} m)
                   </span>
                 </TableCell>
-                <TableCell>{attachment.assemblyUnit}</TableCell>
+                <TableCell>{safeDisplayValue(attachment.assemblyUnit)}</TableCell>
                 <TableCell className="text-center">
                   {attachment.isValid !== undefined ? (
                     attachment.isValid ? (

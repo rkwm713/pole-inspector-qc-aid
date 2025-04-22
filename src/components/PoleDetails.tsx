@@ -1,7 +1,9 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole } from "@/types";
 import { AttachmentTable } from "./AttachmentTable";
+import { safeDisplayValue } from "@/utils/formatting";
 
 interface PoleDetailsProps {
   pole: Pole;
@@ -38,10 +40,10 @@ export function PoleDetails({ pole }: PoleDetailsProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Pole: {pole.structureId}</span>
+          <span>Pole: {safeDisplayValue(pole.structureId)}</span>
           {pole.alias && (
             <span className="text-sm font-normal text-muted-foreground">
-              Alias: {pole.alias}
+              Alias: {safeDisplayValue(pole.alias)}
             </span>
           )}
         </CardTitle>

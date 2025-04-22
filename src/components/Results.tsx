@@ -1,9 +1,11 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole, ValidationResults } from "@/types";
 import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
+import { safeDisplayValue } from "@/utils/formatting";
 
 interface ResultsProps {
   poles: Pole[];
@@ -39,7 +41,7 @@ export function Results({ poles, validationResults }: ResultsProps) {
               <div className="h-[300px] overflow-y-auto">
                 {poles.map((pole) => (
                   <div
-                    key={pole.structureId}
+                    key={typeof pole.structureId === 'string' ? pole.structureId : JSON.stringify(pole.structureId)}
                     className={`p-3 border-b cursor-pointer transition-colors ${
                       selectedPoleId === pole.structureId
                         ? "bg-muted"
@@ -47,10 +49,10 @@ export function Results({ poles, validationResults }: ResultsProps) {
                     }`}
                     onClick={() => handlePoleSelect(pole.structureId)}
                   >
-                    <div className="font-medium">{pole.structureId}</div>
+                    <div className="font-medium">{safeDisplayValue(pole.structureId)}</div>
                     {pole.alias && (
                       <div className="text-sm text-muted-foreground">
-                        Alias: {typeof pole.alias === 'string' ? pole.alias : JSON.stringify(pole.alias)}
+                        Alias: {safeDisplayValue(pole.alias)}
                       </div>
                     )}
                   </div>
