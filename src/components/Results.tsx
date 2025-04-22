@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +11,8 @@ interface ResultsProps {
 }
 
 export function Results({ poles, validationResults }: ResultsProps) {
+  console.log('Results component received poles:', poles);
+  
   const [selectedPoleId, setSelectedPoleId] = useState<string | undefined>(
     poles.length > 0 ? poles[0].structureId : undefined
   );
@@ -22,14 +23,6 @@ export function Results({ poles, validationResults }: ResultsProps) {
 
   // Get the currently selected pole object
   const selectedPole = poles.find(pole => pole.structureId === selectedPoleId);
-
-  // Helper function to safely display any value as a string
-  const safeDisplayValue = (value: any): string => {
-    if (value === null || value === undefined) {
-      return '';
-    }
-    return typeof value === 'string' ? value : JSON.stringify(value);
-  };
 
   return (
     <div className="space-y-6">
@@ -57,7 +50,7 @@ export function Results({ poles, validationResults }: ResultsProps) {
                     <div className="font-medium">{pole.structureId}</div>
                     {pole.alias && (
                       <div className="text-sm text-muted-foreground">
-                        Alias: {safeDisplayValue(pole.alias)}
+                        Alias: {typeof pole.alias === 'string' ? pole.alias : JSON.stringify(pole.alias)}
                       </div>
                     )}
                   </div>

@@ -56,11 +56,7 @@ export function AttachmentTable({ attachments, layerName }: AttachmentTableProps
                     ({attachment.height.value.toFixed(2)} m)
                   </span>
                 </TableCell>
-                <TableCell>
-                  {typeof attachment.assemblyUnit === 'string' 
-                    ? attachment.assemblyUnit 
-                    : JSON.stringify(attachment.assemblyUnit)}
-                </TableCell>
+                <TableCell>{attachment.assemblyUnit}</TableCell>
                 <TableCell className="text-center">
                   {attachment.isValid !== undefined ? (
                     attachment.isValid ? (

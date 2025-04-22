@@ -5,7 +5,6 @@ import { Results } from "@/components/Results";
 import { Pole } from "@/types";
 import { extractPoleData, validatePoleData } from "@/utils/parsers";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
 
 const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -16,32 +15,17 @@ const Index = () => {
     setIsProcessing(true);
     
     try {
-      console.log("Raw JSON data:", JSON.stringify(jsonData).substring(0, 500) + "...");
-      
       // Extract pole data from the JSON
       const extractedPoles = extractPoleData(jsonData);
-      
-      if (extractedPoles.length === 0) {
-        toast.error("No valid pole data could be extracted from the file.");
-        setIsProcessing(false);
-        return;
-      }
-      
-      console.log("Extracted poles before validation:", extractedPoles);
       
       // Validate the extracted data
       const validatedPoles = validatePoleData(extractedPoles);
       
-      console.log("Validated poles:", validatedPoles);
-      
       // Update state with the processed poles
       setPoles(validatedPoles);
       setFileUploaded(true);
-      toast.success(`Successfully processed ${validatedPoles.length} poles.`);
     } catch (err) {
       console.error("Error processing file:", err);
-      toast.error(err instanceof Error ? err.message : "An unknown error occurred while processing the file.");
-      setFileUploaded(false);
     } finally {
       setIsProcessing(false);
     }

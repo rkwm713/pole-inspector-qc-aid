@@ -1,10 +1,8 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, FileText, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "sonner";
 
 interface FileUploadProps {
   onFileLoaded: (data: any) => void;
@@ -21,9 +19,9 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     
     if (!file) return;
     
-    // Accept any file but warn if not .json
     if (!file.name.endsWith('.json')) {
-      toast.warning("This appears to not be a JSON file. Processing will be attempted, but may fail.");
+      setError("Please upload a valid JSON file");
+      return;
     }
     
     setFileName(file.name);
@@ -31,41 +29,18 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      
-      // Log the structure of the uploaded file for debugging
-      console.log("File structure:", {
-        hasLeads: !!data.leads,
-        hasLocations: !!data.locations,
-        hasPoles: !!data.poles,
-        hasClientData: !!data.clientData,
-        leadCount: data.leads?.length,
-        locationCount: data.locations?.length,
-        poleCount: data.poles?.length,
-      });
-      
-      // Check if we have any recognizable structure
-      if (!data.leads && !data.locations && !data.poles && !data.clientData) {
-        const errorMessage = "The file doesn't contain any recognizable pole data structure. Please check the file contents.";
-        setError(errorMessage);
-        toast.error(errorMessage);
-        return;
-      }
-      
+      console.log('Parsed JSON data:', data);
       onFileLoaded(data);
     } catch (err) {
-      console.error("File processing error:", err);
-      const errorMessage = err instanceof Error 
-        ? `Error: ${err.message}` 
-        : "Unable to process the file. Please ensure it's a valid JSON file.";
-      setError(errorMessage);
-      toast.error(errorMessage);
+      setError("Failed to parse the JSON file. Please check the file format.");
+      console.error("File parsing error:", err);
     }
   };
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle className="text-center">Upload File</CardTitle>
+        <CardTitle className="text-center">Upload SPIDAcalc File</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
         <div 
@@ -85,7 +60,7 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
             {fileName ? fileName : "Click to upload or drag and drop"}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Upload your pole data file to begin analysis
+            SPIDAcalc JSON files only
           </p>
         </div>
         
