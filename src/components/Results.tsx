@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole, ValidationResults } from "@/types";
 import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
-import { safeDisplayValue } from "@/utils/formatting";
 
 interface ResultsProps {
   poles: Pole[];
@@ -13,8 +12,6 @@ interface ResultsProps {
 }
 
 export function Results({ poles, validationResults }: ResultsProps) {
-  console.log('Results component received poles:', poles);
-  
   const [selectedPoleId, setSelectedPoleId] = useState<string | undefined>(
     poles.length > 0 ? poles[0].structureId : undefined
   );
@@ -41,7 +38,7 @@ export function Results({ poles, validationResults }: ResultsProps) {
               <div className="h-[300px] overflow-y-auto">
                 {poles.map((pole) => (
                   <div
-                    key={typeof pole.structureId === 'string' ? pole.structureId : JSON.stringify(pole.structureId)}
+                    key={pole.structureId}
                     className={`p-3 border-b cursor-pointer transition-colors ${
                       selectedPoleId === pole.structureId
                         ? "bg-muted"
@@ -49,10 +46,10 @@ export function Results({ poles, validationResults }: ResultsProps) {
                     }`}
                     onClick={() => handlePoleSelect(pole.structureId)}
                   >
-                    <div className="font-medium">{safeDisplayValue(pole.structureId)}</div>
+                    <div className="font-medium">{pole.structureId}</div>
                     {pole.alias && (
                       <div className="text-sm text-muted-foreground">
-                        Alias: {safeDisplayValue(pole.alias)}
+                        Alias: {typeof pole.alias === 'string' ? pole.alias : JSON.stringify(pole.alias)}
                       </div>
                     )}
                   </div>

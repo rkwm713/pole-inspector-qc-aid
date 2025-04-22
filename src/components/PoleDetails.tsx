@@ -3,16 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole } from "@/types";
 import { AttachmentTable } from "./AttachmentTable";
-import { safeDisplayValue } from "@/utils/formatting";
 
 interface PoleDetailsProps {
   pole: Pole;
 }
 
 export function PoleDetails({ pole }: PoleDetailsProps) {
-  console.log('PoleDetails component received pole:', pole);
-  console.log('Available layers:', Object.keys(pole.layers));
-  
   // Sort layers to ensure consistent order (EXISTING, PROPOSED, REMEDY)
   const layerOrder = ["EXISTING", "PROPOSED", "REMEDY"];
   
@@ -40,10 +36,10 @@ export function PoleDetails({ pole }: PoleDetailsProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Pole: {safeDisplayValue(pole.structureId)}</span>
+          <span>Pole: {pole.structureId}</span>
           {pole.alias && (
             <span className="text-sm font-normal text-muted-foreground">
-              Alias: {safeDisplayValue(pole.alias)}
+              Alias: {pole.alias}
             </span>
           )}
         </CardTitle>
