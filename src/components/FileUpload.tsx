@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, FileText, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 interface FileUploadProps {
   onFileLoaded: (data: any) => void;
@@ -21,7 +22,8 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     if (!file) return;
     
     if (!file.name.endsWith('.json')) {
-      setError("Please upload a valid JSON file");
+      setError("Please upload a JSON file");
+      toast.error("Please upload a JSON file");
       return;
     }
     
@@ -30,9 +32,20 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
+      
+      // Log the structure of the uploaded file for debugging
+      console.log("File structure:", {
+        hasLeads: !!data.leads,
+        hasLocations: !!data.locations,
+        hasPoles: !!data.poles,
+        hasClientData: !!data.clientData,
+      });
+      
       onFileLoaded(data);
     } catch (err) {
-      setError("Failed to parse the JSON file. Please check the file format.");
+      const errorMessage = "Unable to process the file. Please ensure it's a valid JSON file.";
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error("File parsing error:", err);
     }
   };
@@ -40,7 +53,7 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle className="text-center">Upload SPIDAcalc File</CardTitle>
+        <CardTitle className="text-center">Upload File</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
         <div 
@@ -60,7 +73,7 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
             {fileName ? fileName : "Click to upload or drag and drop"}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            SPIDAcalc JSON files only
+            Upload your file to begin analysis
           </p>
         </div>
         
