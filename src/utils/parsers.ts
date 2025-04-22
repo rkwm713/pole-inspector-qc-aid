@@ -25,6 +25,23 @@ export const metersToFeetInches = (meters: number): string => {
 };
 
 /**
+ * Convert complex object or value to string representation for display
+ */
+const normalizeToString = (value: any): string => {
+  if (value === null || value === undefined) {
+    return 'Unknown';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value.toString();
+  }
+  // For objects and arrays, convert to a string representation
+  return JSON.stringify(value);
+};
+
+/**
  * Convert Wire objects to PoleAttachment objects
  */
 const wireToAttachment = (wire: Wire): PoleAttachment => {
@@ -33,7 +50,7 @@ const wireToAttachment = (wire: Wire): PoleAttachment => {
     description: wire.description || `Wire ${wire.id}`,
     owner: wire.owner || 'Unknown',
     height: wire.attachmentHeight,
-    assemblyUnit: wire.clientItem || wire.id
+    assemblyUnit: normalizeToString(wire.clientItem || wire.id)
   };
 };
 
@@ -51,7 +68,7 @@ const insulatorToAttachment = (insulator: Insulator): PoleAttachment | null => {
     description: `Insulator ${insulator.id}`,
     owner: insulator.owner || 'Unknown',
     height: insulator.offset,
-    assemblyUnit: insulator.clientItem || insulator.id
+    assemblyUnit: normalizeToString(insulator.clientItem || insulator.id)
   };
 };
 
@@ -69,7 +86,7 @@ const equipmentToAttachment = (equipment: Equipment): PoleAttachment | null => {
     description: `Equipment ${equipment.id}`,
     owner: equipment.owner || 'Unknown',
     height: equipment.attachmentHeight,
-    assemblyUnit: equipment.clientItem || equipment.id
+    assemblyUnit: normalizeToString(equipment.clientItem || equipment.id)
   };
 };
 
@@ -87,7 +104,7 @@ const guyToAttachment = (guy: Guy): PoleAttachment | null => {
     description: `Guy ${guy.id}`,
     owner: guy.owner || 'Unknown',
     height: guy.attachmentHeight,
-    assemblyUnit: guy.clientItem || guy.id
+    assemblyUnit: normalizeToString(guy.clientItem || guy.id)
   };
 };
 
@@ -281,7 +298,7 @@ export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
                 description: remedy.description,
                 owner: 'Unknown',
                 height: { value: 0, unit: 'METRE' },
-                assemblyUnit: remedy.type || 'Unknown'
+                assemblyUnit: normalizeToString(remedy.type || 'Unknown')
               });
             });
             console.log(`Processed ${location.remedies.length} remedies`);
@@ -375,7 +392,7 @@ export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
             description: remedy.description,
             owner: 'Unknown',
             height: { value: 0, unit: 'METRE' },
-            assemblyUnit: remedy.type || 'Unknown'
+            assemblyUnit: normalizeToString(remedy.type || 'Unknown')
           });
         });
       }
@@ -448,12 +465,16 @@ export const validatePoleData = (poles: Pole[]): Pole[] => {
       }
       
       layer.attachments = layer.attachments.map(attachment => {
-        // Check if assemblyUnit exists and is a string before using trim()
+        // Ensure assemblyUnit is always a string
+        if (attachment.assemblyUnit && typeof attachment.assemblyUnit !== 'string') {
+          attachment.assemblyUnit = normalizeToString(attachment.assemblyUnit);
+        }
+        
+        // Validate assemblyUnit
         const assemblyUnit = attachment.assemblyUnit;
-        // Ensure assemblyUnit is a string and not null/undefined
         const isValid = typeof assemblyUnit === 'string' ? 
                         assemblyUnit.trim().length > 0 : 
-                        !!assemblyUnit; // if not a string, convert to boolean
+                        !!assemblyUnit;
         
         return {
           ...attachment,
