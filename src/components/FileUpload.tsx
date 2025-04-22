@@ -53,10 +53,12 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
       
       onFileLoaded(data);
     } catch (err) {
-      const errorMessage = "Unable to process the file. Please ensure it's a valid JSON file.";
+      console.error("File processing error:", err);
+      const errorMessage = err instanceof Error 
+        ? `Error: ${err.message}` 
+        : "Unable to process the file. Please ensure it's a valid JSON file.";
       setError(errorMessage);
       toast.error(errorMessage);
-      console.error("File parsing error:", err);
     }
   };
 

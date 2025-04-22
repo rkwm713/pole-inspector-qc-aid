@@ -442,10 +442,18 @@ export const validatePoleData = (poles: Pole[]): Pole[] => {
     Object.keys(validatedPole.layers).forEach(layerKey => {
       const layer = validatedPole.layers[layerKey];
       
+      if (!layer.attachments) {
+        layer.attachments = [];
+        return;
+      }
+      
       layer.attachments = layer.attachments.map(attachment => {
-        // Example validation: check if assemblyUnit exists
-        const isValid = attachment.assemblyUnit !== 'N/A' && 
-                        attachment.assemblyUnit.trim().length > 0;
+        // Check if assemblyUnit exists and is a string before using trim()
+        const assemblyUnit = attachment.assemblyUnit;
+        // Ensure assemblyUnit is a string and not null/undefined
+        const isValid = typeof assemblyUnit === 'string' ? 
+                        assemblyUnit.trim().length > 0 : 
+                        !!assemblyUnit; // if not a string, convert to boolean
         
         return {
           ...attachment,
