@@ -1,4 +1,3 @@
-
 // SPIDAcalc JSON Parser Utilities
 import { Pole, PoleAttachment, PoleLayer, PoleDetails, WireEndPoint, SPIDAcalcData, Wire, Remedy, Location, Design, Insulator, Equipment, Guy, Lead } from "@/types";
 
@@ -166,7 +165,7 @@ export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
         console.log(`Processing location ${locationIndex} in lead ${leadIndex}`, location);
         
         // Handle direct pole information in location (per clarification)
-        const poleId = location.name || location.label || `Pole-${leadIndex}-${locationIndex}`;
+        const poleId = location.label || `Pole-${leadIndex}-${locationIndex}`;
         console.log(`Found pole ID: ${poleId}`);
         
         // Extract coordinates
@@ -191,7 +190,7 @@ export const extractPoleData = (jsonData: SPIDAcalcData): Pole[] => {
           // Create pole with basic information
           const pole: Pole = {
             structureId: poleId,
-            alias: location.externalId,
+            alias: location.designs?.[0]?.structure?.pole?.externalId,
             coordinates,
             layers
           };
