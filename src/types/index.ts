@@ -1,4 +1,3 @@
-
 // SPIDAcalc Data Types
 
 export interface PoleAttachment {
