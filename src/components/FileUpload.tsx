@@ -21,10 +21,9 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
     
     if (!file) return;
     
+    // Accept any file but warn if not .json
     if (!file.name.endsWith('.json')) {
-      setError("Please upload a JSON file");
-      toast.error("Please upload a JSON file");
-      return;
+      toast.warning("This appears to not be a JSON file. Processing will be attempted, but may fail.");
     }
     
     setFileName(file.name);
@@ -39,7 +38,18 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
         hasLocations: !!data.locations,
         hasPoles: !!data.poles,
         hasClientData: !!data.clientData,
+        leadCount: data.leads?.length,
+        locationCount: data.locations?.length,
+        poleCount: data.poles?.length,
       });
+      
+      // Check if we have any recognizable structure
+      if (!data.leads && !data.locations && !data.poles && !data.clientData) {
+        const errorMessage = "The file doesn't contain any recognizable pole data structure. Please check the file contents.";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return;
+      }
       
       onFileLoaded(data);
     } catch (err) {
@@ -73,7 +83,7 @@ export function FileUpload({ onFileLoaded, isLoading }: FileUploadProps) {
             {fileName ? fileName : "Click to upload or drag and drop"}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Upload your file to begin analysis
+            Upload your pole data file to begin analysis
           </p>
         </div>
         
