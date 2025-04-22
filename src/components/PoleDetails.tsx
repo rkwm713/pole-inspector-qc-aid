@@ -31,6 +31,14 @@ export function PoleDetails({ pole }: PoleDetailsProps) {
   
   // Use the first layer as default tab
   const defaultTab = sortedLayerKeys.length > 0 ? sortedLayerKeys[0] : undefined;
+
+  // Helper function to safely display any value as a string
+  const safeDisplayValue = (value: any): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  };
   
   return (
     <Card>
@@ -39,7 +47,7 @@ export function PoleDetails({ pole }: PoleDetailsProps) {
           <span>Pole: {pole.structureId}</span>
           {pole.alias && (
             <span className="text-sm font-normal text-muted-foreground">
-              Alias: {pole.alias}
+              Alias: {safeDisplayValue(pole.alias)}
             </span>
           )}
         </CardTitle>

@@ -16,6 +16,8 @@ const Index = () => {
     setIsProcessing(true);
     
     try {
+      console.log("Raw JSON data:", JSON.stringify(jsonData).substring(0, 500) + "...");
+      
       // Extract pole data from the JSON
       const extractedPoles = extractPoleData(jsonData);
       
@@ -25,8 +27,12 @@ const Index = () => {
         return;
       }
       
+      console.log("Extracted poles before validation:", extractedPoles);
+      
       // Validate the extracted data
       const validatedPoles = validatePoleData(extractedPoles);
+      
+      console.log("Validated poles:", validatedPoles);
       
       // Update state with the processed poles
       setPoles(validatedPoles);

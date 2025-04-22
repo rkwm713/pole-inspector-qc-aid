@@ -23,6 +23,14 @@ export function Results({ poles, validationResults }: ResultsProps) {
   // Get the currently selected pole object
   const selectedPole = poles.find(pole => pole.structureId === selectedPoleId);
 
+  // Helper function to safely display any value as a string
+  const safeDisplayValue = (value: any): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -49,7 +57,7 @@ export function Results({ poles, validationResults }: ResultsProps) {
                     <div className="font-medium">{pole.structureId}</div>
                     {pole.alias && (
                       <div className="text-sm text-muted-foreground">
-                        Alias: {typeof pole.alias === 'string' ? pole.alias : JSON.stringify(pole.alias)}
+                        Alias: {safeDisplayValue(pole.alias)}
                       </div>
                     )}
                   </div>
