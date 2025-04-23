@@ -1,9 +1,11 @@
 
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PoleAttachment } from "@/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Check, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface AttachmentTableProps {
   attachments: PoleAttachment[];
@@ -11,6 +13,49 @@ interface AttachmentTableProps {
 }
 
 export function AttachmentTable({ attachments, layerName }: AttachmentTableProps) {
+  // State to track ordered attachments by category
+  const [orderedAttachments, setOrderedAttachments] = useState<Record<string, PoleAttachment[]>>({});
+
+  // Initialize ordered attachments when component mounts or attachments change
+  useEffect(() => {
+    // Create a copy of categorized attachments
+    const categorized: Record<string, PoleAttachment[]> = {};
+    attachments.forEach(attachment => {
+      const type = attachment.attachmentType || "OTHER";
+      if (!categorized[type]) categorized[type] = [];
+      categorized[type].push(attachment);
+    });
+    setOrderedAttachments(categorized);
+  }, [attachments]);
+
+  // Function to move an attachment up within its category
+  const moveAttachmentUp = (type: string, index: number) => {
+    if (index === 0) return; // Already at the top
+    
+    const newOrderedAttachments = { ...orderedAttachments };
+    const category = [...newOrderedAttachments[type]];
+    
+    // Swap with the item above
+    [category[index - 1], category[index]] = [category[index], category[index - 1]];
+    
+    newOrderedAttachments[type] = category;
+    setOrderedAttachments(newOrderedAttachments);
+  };
+
+  // Function to move an attachment down within its category
+  const moveAttachmentDown = (type: string, index: number) => {
+    if (!orderedAttachments[type] || index >= orderedAttachments[type].length - 1) return; // Already at the bottom
+    
+    const newOrderedAttachments = { ...orderedAttachments };
+    const category = [...newOrderedAttachments[type]];
+    
+    // Swap with the item below
+    [category[index], category[index + 1]] = [category[index + 1], category[index]];
+    
+    newOrderedAttachments[type] = category;
+    setOrderedAttachments(newOrderedAttachments);
+  };
+
   // Determine badge color based on layer name
   const getBadgeVariant = () => {
     switch (layerName.toUpperCase()) {
@@ -79,7 +124,8 @@ export function AttachmentTable({ attachments, layerName }: AttachmentTableProps
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[200px]">Description</TableHead>
+                      <TableHead className="w-[40px]"></TableHead>
+                      <TableHead className="w-[180px]">Description</TableHead>
                       <TableHead className="w-[120px]">Owner</TableHead>
                       <TableHead className="w-[100px]">Height</TableHead>
                       <TableHead className="w-[100px]">Assembly Unit</TableHead>
@@ -89,8 +135,30 @@ export function AttachmentTable({ attachments, layerName }: AttachmentTableProps
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {typeAttachments.map((attachment, index) => (
+                    {(orderedAttachments[type] || typeAttachments).map((attachment, index) => (
                       <TableRow key={attachment.id || index}>
+                        <TableCell className="p-0 w-[40px]">
+                          <div className="flex flex-col space-y-1 items-center justify-center py-2">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() => moveAttachmentUp(type, index)}
+                              disabled={index === 0}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost" 
+                              className="h-6 w-6"
+                              onClick={() => moveAttachmentDown(type, index)}
+                              disabled={index === (orderedAttachments[type]?.length || 0) - 1}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                         <TableCell className="font-medium">
                           {attachment.clientItemAlias || attachment.description}
                           {attachment.model && (

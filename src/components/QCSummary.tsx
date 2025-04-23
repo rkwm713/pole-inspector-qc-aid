@@ -36,6 +36,7 @@ export function QCSummary({ poles }: QCSummaryProps) {
     
     const qc = pole.qcResults;
     const checks = [
+      // Original checks
       qc.ownerCheck,
       qc.anchorCheck,
       qc.poleSpecCheck,
@@ -46,8 +47,15 @@ export function QCSummary({ poles }: QCSummaryProps) {
       qc.attachmentSpecCheck,
       qc.heightCheck,
       qc.specFileCheck,
-      qc.clearanceCheck
-    ];
+      qc.clearanceCheck,
+      // New checks
+      qc.layerComparisonCheck,
+      qc.poleStressCheck,
+      qc.stationNameCheck,
+      qc.loadCaseCheck,
+      qc.projectSettingsCheck,
+      qc.messengerSizeCheck
+    ].filter(check => check !== undefined);
     
     checks.forEach(check => {
       if (check.status === "PASS") counts.pass++;

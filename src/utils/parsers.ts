@@ -10,8 +10,14 @@ import {
   QCResults,
   QCCheckResult,
   QCCheckStatus,
-  WireEndPoint
+  WireEndPoint,
+  ProjectInfo,
+  ParsedData
 } from "@/types";
+
+import {
+  runQCChecks as runQCValidations
+} from "@/utils/qcChecks";
 
 // Minimal interfaces for raw SPIDAcalc data structures (based on usage)
 interface RawGeoCoord {
@@ -151,12 +157,56 @@ export const metersToFeetInches = (meters: number): string => {
 };
 
 /**
- * Extract pole data from SPIDAcalc JSON following the specified structure
+ * Extract pole data and project info from SPIDAcalc JSON following the specified structure
  * @param jsonData The parsed JSON data from SPIDAcalc (type unknown as structure can vary)
- * @returns Array of extracted pole objects
+ * @returns Object containing pole array and project info
  */
-export const extractPoleData = (jsonData: unknown): Pole[] => {
+export const extractPoleData = (jsonData: unknown): ParsedData => {
+  // Extract project info
+  const projectInfo: ProjectInfo = {
+    engineer: undefined,
+    comments: undefined,
+    generalLocation: undefined,
+    address: undefined,
+    defaultLoadCases: undefined
+  };
+  
+  // Extract top-level project fields if they exist
+  if (typeof jsonData === 'object' && jsonData !== null) {
+    const data = jsonData as Record<string, unknown>;
+    
+    // Extract engineer
+    if (typeof data.engineer === 'string') {
+      projectInfo.engineer = data.engineer;
+    }
+    
+    // Extract comments
+    if (typeof data.comments === 'string') {
+      projectInfo.comments = data.comments;
+    }
+    
+    // Extract generalLocation
+    if (typeof data.generalLocation === 'string') {
+      projectInfo.generalLocation = data.generalLocation;
+    }
+    
+    // Extract address (which might be an object with various fields)
+    if (typeof data.address === 'object' && data.address !== null) {
+      projectInfo.address = data.address as Record<string, unknown>;
+    }
+    
+    // Extract defaultLoadCases
+    if (Array.isArray(data.defaultLoadCases)) {
+      projectInfo.defaultLoadCases = data.defaultLoadCases
+        .filter(item => typeof item === 'string')
+        .map(item => item as string);
+    }
+  }
   // Type guard to ensure jsonData is an object with a 'leads' array
+  // Initialize the array to hold the parsed pole data
+  const poles: Pole[] = [];
+  
+  // Check for leads structure
   if (
     typeof jsonData !== 'object' || 
     jsonData === null || 
@@ -165,7 +215,7 @@ export const extractPoleData = (jsonData: unknown): Pole[] => {
     (jsonData as { leads: unknown[] }).leads.length === 0
   ) {
     console.error("Invalid JSON structure: Missing or empty leads array", jsonData);
-    return [];
+    return { poles, projectInfo };
   }
 
   // Now we know jsonData has a leads array
@@ -174,10 +224,8 @@ export const extractPoleData = (jsonData: unknown): Pole[] => {
   const primaryLead = leads[0] as Record<string, unknown>; // Asserting it's an object-like structure
   if (!primaryLead || typeof primaryLead !== 'object' || !('locations' in primaryLead) || !Array.isArray(primaryLead.locations)) {
     console.error("Invalid lead structure: Missing or invalid locations array", primaryLead);
-    return [];
+    return { poles, projectInfo };
   }
-
-  const poles: Pole[] = [];
   
   // Process each location (pole site) in the locations array
   primaryLead.locations.forEach((location: unknown) => {
@@ -369,7 +417,7 @@ export const extractPoleData = (jsonData: unknown): Pole[] => {
     });
   });
   
-  return poles;
+  return { poles, projectInfo };
 };
 
 /**
@@ -609,218 +657,21 @@ const extractClearanceResults = (clearanceResultsData: unknown[]): ClearanceResu
 /**
  * Validate pole data against PNM specifications
  * @param poles Array of pole objects
+ * @param projectInfo Project information for validation
  * @returns Array of validated pole objects with QC results
  */
-export const validatePoleData = (poles: Pole[]): Pole[] => {
+export const validatePoleData = (poleData: ParsedData): Pole[] => {
+  const { poles, projectInfo } = poleData;
+  
   return poles.map(pole => {
     // Deep clone the pole object to avoid mutating the original
     const validatedPole = JSON.parse(JSON.stringify(pole)) as Pole;
     
-    // Initialize QC results object
-    validatedPole.qcResults = runQCChecks(validatedPole);
+    // Initialize QC results object using the imported function from qcChecks.ts
+    validatedPole.qcResults = runQCValidations(validatedPole, projectInfo);
     
     return validatedPole;
   });
 };
 
-/**
- * Run all QC checks on a pole and generate comprehensive results
- */
-const runQCChecks = (pole: Pole): QCResults => {
-  // Initialize empty check results with default values
-  const initCheckResult = (): QCCheckResult => ({
-    status: "NOT_CHECKED",
-    message: "Not checked",
-    details: []
-  });
-  
-  const qcResults: QCResults = {
-    ownerCheck: initCheckResult(),
-    anchorCheck: initCheckResult(),
-    poleSpecCheck: initCheckResult(),
-    assemblyUnitsCheck: initCheckResult(),
-    glcCheck: initCheckResult(),
-    poleOrderCheck: initCheckResult(),
-    tensionCheck: initCheckResult(),
-    attachmentSpecCheck: initCheckResult(),
-    heightCheck: initCheckResult(),
-    specFileCheck: initCheckResult(),
-    clearanceCheck: initCheckResult(),
-    overallStatus: "NOT_CHECKED",
-    passCount: 0,
-    failCount: 0,
-    warningCount: 0
-  };
-  
-  // Run each check function and update results
-  qcResults.ownerCheck = checkOwners(pole);
-  qcResults.anchorCheck = checkAnchors(pole);
-  qcResults.poleSpecCheck = initCheckResult();
-  qcResults.assemblyUnitsCheck = initCheckResult();
-  qcResults.glcCheck = initCheckResult();
-  qcResults.tensionCheck = initCheckResult();
-  qcResults.attachmentSpecCheck = initCheckResult();
-  qcResults.clearanceCheck = initCheckResult();
-  
-  // Count results by status
-  const countResults = (results: QCResults): void => {
-    const checks = [
-      results.ownerCheck,
-      results.anchorCheck,
-      results.poleSpecCheck,
-      results.assemblyUnitsCheck,
-      results.glcCheck,
-      results.poleOrderCheck,
-      results.tensionCheck, 
-      results.attachmentSpecCheck,
-      results.heightCheck,
-      results.specFileCheck,
-      results.clearanceCheck
-    ];
-    
-    results.passCount = checks.filter(check => check.status === "PASS").length;
-    results.failCount = checks.filter(check => check.status === "FAIL").length;
-    results.warningCount = checks.filter(check => check.status === "WARNING").length;
-    
-    // Determine overall status
-    if (results.failCount > 0) {
-      results.overallStatus = "FAIL";
-    } else if (results.warningCount > 0) {
-      results.overallStatus = "WARNING";
-    } else if (results.passCount > 0) {
-      results.overallStatus = "PASS";
-    } else {
-      results.overallStatus = "NOT_CHECKED";
-    }
-  };
-  
-  countResults(qcResults);
-  return qcResults;
-};
-
-/**
- * Check that owners are consistent between attachments and wires
- */
-const checkOwners = (pole: Pole): QCCheckResult => {
-  const result: QCCheckResult = {
-    status: "NOT_CHECKED",
-    message: "Owner consistency check not performed",
-    details: []
-  };
-  
-  // For proposed and remedy designs, check wire and attachment owner consistency
-  const relevantLayers = ["PROPOSED", "REMEDY"];
-  let inconsistencies = 0;
-  
-  relevantLayers.forEach(layerName => {
-    const layer = pole.layers[layerName];
-    if (!layer) return;
-    
-    // Create a map of attachment ID to owner
-    const attachmentOwners: Record<string, string> = {};
-    layer.attachments.forEach(attachment => {
-      if (attachment.id) {
-        attachmentOwners[attachment.id] = attachment.owner.id;
-      }
-    });
-    
-    // Check if wire owners match their connected attachment owners
-    layer.wires.forEach(wire => {
-      // Ensure associatedAttachments exists and is an array of strings
-      const associatedIds: string[] = [];
-      
-      // Only process if wire.associatedAttachments exists and is an array
-      if (wire.associatedAttachments && Array.isArray(wire.associatedAttachments)) {
-        wire.associatedAttachments.forEach(id => {
-          if (typeof id === 'string') {
-            associatedIds.push(id);
-          }
-        });
-      }
-      
-      // Process only string IDs
-      associatedIds.forEach(attachmentId => {
-        const attachmentOwner = attachmentOwners[attachmentId];
-        if (attachmentOwner && attachmentOwner !== wire.owner.id) {
-          inconsistencies++;
-          result.details.push(
-            `In ${layerName} layer: Wire owned by ${wire.owner.id} is connected to attachment owned by ${attachmentOwner}`
-          );
-        }
-      });
-    });
-  });
-  
-  if (inconsistencies > 0) {
-    result.status = "FAIL";
-    result.message = `Found ${inconsistencies} owner inconsistencies between wires and their connected attachments`;
-  } else {
-    result.status = "PASS";
-    result.message = "All wire and attachment owners are consistent";
-  }
-  
-  return result;
-};
-
-/**
- * Check that anchors and guy wires match PNM specifications
- */
-const checkAnchors = (pole: Pole): QCCheckResult => {
-  const result: QCCheckResult = {
-    status: "NOT_CHECKED",
-    message: "Anchor and guy wire check not performed",
-    details: []
-  };
-
-  // For proposed and remedy designs, check anchor and guy wire specs
-  const relevantLayers = ["PROPOSED", "REMEDY"];
-  let issues = 0;
-
-  relevantLayers.forEach(layerName => {
-    const layer = pole.layers[layerName];
-    if (!layer) return;
-
-    // Find anchors
-    const anchors = layer.attachments.filter(
-      attachment => attachment.attachmentType === "ANCHOR"
-    );
-
-    // Find guy wires
-    const guyWires = layer.attachments.filter(
-      attachment => attachment.attachmentType === "GUY"
-    );
-
-    // Check PNM guys: 12" anchor type and 3/8" or 1/2" guy wire size
-    const pnmGuys = guyWires.filter(guy => guy.owner.id.includes("PNM"));
-    pnmGuys.forEach(guy => {
-      // Check if guy is connected to a correctly sized anchor
-      const matchingAnchor = anchors.find(
-        anchor => anchor.owner.id.includes("PNM") &&
-                  (anchor.description.includes("12") || anchor.size?.includes("12"))
-      );
-
-      if (!matchingAnchor) {
-        issues++;
-        result.details.push(`In ${layerName} layer: PNM guy wire does not have a matching 12" anchor`);
-      }
-
-      // Check guy wire size
-      const validSizes = ["3/8", "1/2"];
-      const sizeValid = validSizes.some(size =>
-        guy.size?.includes(size) ||
-        guy.description.includes(size) ||
-        guy.clientItemAlias?.includes(size)
-      );
-    });
-  });
-
-  if (issues > 0) {
-    result.status = "FAIL";
-    result.message = `Found ${issues} anchor/guy wire issues`;
-  } else {
-    result.status = "PASS";
-    result.message = "All anchor and guy wire specs are valid";
-  }
-  
-  return result;
-};
+// QC checks have been moved to qcChecks.ts

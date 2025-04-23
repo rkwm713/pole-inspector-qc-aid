@@ -73,12 +73,20 @@ export function QCResultsCard({ results }: QCResultsCardProps) {
       case "heightCheck": return "Attachment Heights";
       case "specFileCheck": return "PNM Spec File";
       case "clearanceCheck": return "Clearance Checks";
+      // New checks
+      case "layerComparisonCheck": return "Layer-to-Layer Owner/Usage Changes";
+      case "poleStressCheck": return "Pole Stress Change";
+      case "stationNameCheck": return "Station Name Format";
+      case "loadCaseCheck": return "Load Case Verification";
+      case "projectSettingsCheck": return "Project Settings Completeness";
+      case "messengerSizeCheck": return "Messenger Size Verification";
       default: return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
     }
   };
 
   // Get ordered list of checks
   const orderedChecks = [
+    // Original checks
     { key: "ownerCheck" as keyof QCResults, result: results.ownerCheck },
     { key: "poleSpecCheck" as keyof QCResults, result: results.poleSpecCheck },
     { key: "glcCheck" as keyof QCResults, result: results.glcCheck },
@@ -90,7 +98,14 @@ export function QCResultsCard({ results }: QCResultsCardProps) {
     { key: "poleOrderCheck" as keyof QCResults, result: results.poleOrderCheck },
     { key: "heightCheck" as keyof QCResults, result: results.heightCheck },
     { key: "specFileCheck" as keyof QCResults, result: results.specFileCheck },
-  ].filter(check => check.result.status !== "NOT_CHECKED");
+    // New checks
+    { key: "layerComparisonCheck" as keyof QCResults, result: results.layerComparisonCheck },
+    { key: "poleStressCheck" as keyof QCResults, result: results.poleStressCheck },
+    { key: "stationNameCheck" as keyof QCResults, result: results.stationNameCheck },
+    { key: "loadCaseCheck" as keyof QCResults, result: results.loadCaseCheck },
+    { key: "projectSettingsCheck" as keyof QCResults, result: results.projectSettingsCheck },
+    { key: "messengerSizeCheck" as keyof QCResults, result: results.messengerSizeCheck },
+  ].filter(check => check.result && check.result.status !== "NOT_CHECKED");
 
   // Sort checks by status (FAIL first, then WARNING, then PASS)
   const statusPriority: Record<QCCheckStatus, number> = {

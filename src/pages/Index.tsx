@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { Results } from "@/components/Results";
-import { Pole } from "@/types";
+import { Pole, ProjectInfo, ParsedData } from "@/types";
 import { extractPoleData, validatePoleData } from "@/utils/parsers";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [poles, setPoles] = useState<Pole[]>([]);
+  const [projectInfo, setProjectInfo] = useState<ProjectInfo>({});
   const [fileUploaded, setFileUploaded] = useState(false);
   const [originalJsonData, setOriginalJsonData] = useState<Record<string, unknown> | undefined>(undefined);
 
@@ -20,11 +21,14 @@ const Index = () => {
       // Store the original JSON data for later use when saving changes
       setOriginalJsonData(jsonData);
       
-      // Extract pole data from the JSON
-      const extractedPoles = extractPoleData(jsonData);
+      // Extract pole data and project info from the JSON
+      const parsedData = extractPoleData(jsonData);
       
-      // Validate the extracted data
-      const validatedPoles = validatePoleData(extractedPoles);
+      // Store project info separately
+      setProjectInfo(parsedData.projectInfo);
+      
+      // Validate the extracted data with the project info
+      const validatedPoles = validatePoleData(parsedData);
       
       // Update state with the processed poles
       setPoles(validatedPoles);

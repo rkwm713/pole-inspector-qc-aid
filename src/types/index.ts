@@ -42,6 +42,7 @@ export interface PoleWire {
   clientItem?: {
     size?: string;
     type?: string;
+    messengerSize?: string; // Added for communication bundle messenger size
   };
   associatedAttachments?: string[]; // IDs of related attachments
   usageGroup?: string; // E.g., "UTILITY_SERVICE", "COMMUNICATION_SERVICE", etc.
@@ -115,6 +116,10 @@ export interface PoleLayer {
   wireEndPoints?: WireEndPoint[];
   poleProperties?: PoleProperties;
   clearanceResults?: ClearanceResult[];
+  analysisResults?: {
+    maxStressRatio?: number;  // Added for pole stress check
+    // Other analysis results can be added here if needed
+  };
 }
 
 export interface QCCheckResult {
@@ -135,6 +140,13 @@ export interface QCResults {
   heightCheck: QCCheckResult;
   specFileCheck: QCCheckResult;
   clearanceCheck: QCCheckResult;
+  // New checks
+  layerComparisonCheck: QCCheckResult; // For owner/usageGroup changes between layers
+  poleStressCheck: QCCheckResult; // For stress change > 20%
+  stationNameCheck: QCCheckResult; // For lowercase in station names
+  loadCaseCheck: QCCheckResult; // For load case verification
+  projectSettingsCheck: QCCheckResult; // For project settings completeness
+  messengerSizeCheck: QCCheckResult; // For messenger size verification
   overallStatus: QCCheckStatus;
   passCount: number;
   failCount: number;
@@ -164,4 +176,19 @@ export interface ValidationResults {
     warningCount: number;
     totalChecks: number;
   };
+}
+
+// New interface for project info data
+export interface ProjectInfo {
+  engineer?: string;
+  comments?: string;
+  generalLocation?: string;
+  address?: Record<string, any>; // Or a more specific address type if known
+  defaultLoadCases?: string[]; // Assuming an array of strings for load cases
+}
+
+// Updated return type for extractPoleData
+export interface ParsedData {
+  poles: Pole[];
+  projectInfo: ProjectInfo;
 }
