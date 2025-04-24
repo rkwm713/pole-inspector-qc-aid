@@ -11,6 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { KmzFiberData, Pole, PoleWire } from "@/types";
 import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { 
+  calculateDistance, 
+  extractFiberSize,
+  extractFromHtml,
+  extractPropertyValue,
+  getCapafoValue,
+  isGigapowerData
+} from "@/utils/fiberUtils";
 
 interface KmzDataViewerProps {
   isOpen: boolean;
@@ -21,126 +29,10 @@ interface KmzDataViewerProps {
 }
 
 export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }: KmzDataViewerProps) {
-  // Extract value from HTML table row
-  const extractFromHtml = (html: string, propName: string): string | null => {
-    // Check if it's HTML content
-    if (!html.includes('<html') && !html.includes('<table')) {
-      return null;
-    }
-    
-    try {
-      // For cb_capafo, look for the specific table row pattern
-      if (propName === "cb_capafo") {
-        // Match pattern: <td>cb_capafo</td> <td>VALUE</td>
-        const pattern = new RegExp(`<td[^>]*>${propName}</td>\\s*<td[^>]*>(.*?)</td>`, 'i');
-        const match = html.match(pattern);
-        if (match && match[1]) {
-          return match[1].trim();
-        }
-      }
-      
-      // For other properties, similar approach
-      const pattern = new RegExp(`<td[^>]*>${propName}</td>\\s*<td[^>]*>(.*?)</td>`, 'i');
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
-    } catch (error) {
-      console.error("Error parsing HTML:", error);
-    }
-    
-    return null;
-  };
-
-  // Get value from item description (handles HTML, JSON and plain text)
-  const getPropertyValue = (item: KmzFiberData, propName: string): string => {
-    if (!item.description) return "";
-    
-    // 1. First check if it's HTML content with tables
-    const htmlValue = extractFromHtml(item.description, propName);
-    if (htmlValue) {
-      return htmlValue;
-    }
-    
-    // 2. Check if the property might be in the description as JSON
-    try {
-      if (item.description.trim().startsWith('{') && item.description.trim().endsWith('}')) {
-        const descObj = JSON.parse(item.description);
-        if (propName in descObj) {
-          return descObj[propName]?.toString() || "";
-        }
-      }
-    } catch {
-      // If parsing fails, continue with regex approach
-    }
-    
-    // 3. If not JSON or parsing failed, try regex pattern matching
-    const regex = new RegExp(`${propName}[\\s:=]+(\\w+)`, 'i');
-    const match = item.description.match(regex);
-    if (match && match[1]) {
-      return match[1];
-    }
-    
-    return "";
-  };
-
-  // Get cb_capafo value (fiber size) if available
+  // Use shared utility function for getting cb_capafo value
   const getCbCapafo = (item: KmzFiberData): string => {
-    // 1. Check if cb_capafo is already in the properties
-    if (typeof item.description === 'string' && item.description.includes('cb_capafo')) {
-      const fromProp = getPropertyValue(item, "cb_capafo");
-      if (fromProp) return fromProp;
-    }
-    
-    // 2. For backward compatibility, fall back to fiberSize
-    return item.fiberSize || "";
-  };
-
-  // Check if an item is related to Gigapower - for the KMZ data in this case,
-  // we'll consider all entries with c_sro=PSA_317 as Gigapower data
-  const isGigapowerData = (item: KmzFiberData): boolean => {
-    // Extract c_sro value, which appears to identify Gigapower data
-    const sro = getPropertyValue(item, "c_sro");
-    if (sro && sro.includes("PSA_317")) {
-      return true;
-    }
-    
-    // Also check traditional identifiers
-    const description = item.description?.toLowerCase() || "";
-    return (
-      description.includes("gigapower") || 
-      description.includes("att") ||
-      getPropertyValue(item, "owner")?.toLowerCase().includes("gigapower") ||
-      getPropertyValue(item, "owner")?.toLowerCase().includes("att") ||
-      getPropertyValue(item, "company")?.toLowerCase().includes("gigapower") ||
-      getPropertyValue(item, "company")?.toLowerCase().includes("att")
-    );
-  };
-  
-  // Enhanced function to calculate distance between two coordinate points
-  const calculateDistance = (
-    lat1: number, lon1: number, 
-    lat2: number, lon2: number
-  ): number => {
-    // Reduce sensitivity to minor coordinate differences
-    // Use fewer decimal places for comparison to account for precision variations
-    const precision = 5; // 5 decimal places (~1.1 meter precision)
-    
-    // Round coordinates to specified precision
-    const roundedLat1 = Math.round(lat1 * Math.pow(10, precision)) / Math.pow(10, precision);
-    const roundedLon1 = Math.round(lon1 * Math.pow(10, precision)) / Math.pow(10, precision);
-    const roundedLat2 = Math.round(lat2 * Math.pow(10, precision)) / Math.pow(10, precision);
-    const roundedLon2 = Math.round(lon2 * Math.pow(10, precision)) / Math.pow(10, precision);
-    
-    // Scale factor for more readable numbers
-    const scaleFactor = 100000; // Scale up for more readable numbers
-    
-    // Calculate normalized distance with rounded coordinates
-    const latDiff = Math.abs(roundedLat1 - roundedLat2) * scaleFactor;
-    const lonDiff = Math.abs(roundedLon1 - roundedLon2) * scaleFactor;
-    
-    // Use squared distance to avoid square root operation
-    return (latDiff * latDiff) + (lonDiff * lonDiff);
+    const value = getCapafoValue(item);
+    return value || item.fiberSize || "";
   };
   
   // Find Gigapower or AT&T fiber wires in a specific layer
@@ -200,19 +92,18 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
     
     // Get all fiber wires - enhanced detection for AT&T/Gigapower and general fiber indicators
     const fiberWires = wires.filter((wire: PoleWire) => {
-      // Check if it's Gigapower/AT&T with more flexible matching
+      // Use the same fiber detection logic that we use in the QC checks
+      // Check for AT&T/Gigapower indicators
       const ownerStr = (wire.owner?.id || "").toLowerCase();
       const externalIdStr = (wire.externalId || "").toLowerCase();
       const descriptionStr = (wire.description || "").toLowerCase();
       const sizeStr = (wire.size || "").toLowerCase();
       const clientItemSizeStr = (wire.clientItem?.size || "").toLowerCase();
       const clientItemTypeStr = (wire.clientItem?.type || "").toLowerCase();
-      // Note: clientItem doesn't have an id property per the type definition
-      const clientItemAdditionalStr = ""; // Empty string as clientItem.id doesn't exist
       
       // Check for AT&T/Gigapower indicators in all possible fields
       const isATTGigapower = 
-        // Owner checks - more flexible matching including partial and case-insensitive
+        // Owner checks
         ownerStr.includes("att") || 
         ownerStr.includes("at&t") || 
         ownerStr.includes("gigapower") || 
@@ -232,7 +123,7 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
         sizeStr.includes("at&t") ||
         sizeStr.includes("gigapower") ||
         sizeStr.includes("gig") ||
-        // ClientItem checks - check all possible fields
+        // ClientItem checks
         clientItemSizeStr.includes("att") ||
         clientItemSizeStr.includes("at&t") ||
         clientItemSizeStr.includes("gigapower") ||
@@ -240,34 +131,40 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
         clientItemTypeStr.includes("att") ||
         clientItemTypeStr.includes("at&t") ||
         clientItemTypeStr.includes("gigapower") ||
-        clientItemTypeStr.includes("gig") ||
         clientItemTypeStr.includes("gig");
       
-      // Enhanced check for fiber indicators in all possible fields
+      // Check for fiber indicators
       const isFiber = 
         // Type checks
-        (wire.type || "").toLowerCase().match(/(fiber|fbr|optic|fo)/i) ||
-        // Description checks - expanded patterns
-        descriptionStr.match(/(fiber|fbr|optic|fo|ft|ct)/i) ||
-        // Size format checks - more patterns
-        sizeStr.match(/(fiber|fbr|optic|fo|ft|ct)/i) ||
-        sizeStr.match(/\d+[\s-]*(ct|fiber|fbr|fo|ft)/i) ||
-        // ClientItem comprehensive checks
-        clientItemSizeStr.match(/(fiber|fbr|optic|fo|ft|ct)/i) ||
-        clientItemSizeStr.match(/\d+[\s-]*(ct|fiber|fbr|fo|ft)/i) ||
-        clientItemTypeStr.match(/(fiber|fbr|optic|fo|ft|ct)/i) ||
-        clientItemTypeStr.match(/\d+[\s-]*(ct|fiber|fbr|fo|ft)/i);
+        ((wire.type || "").toLowerCase().includes("fiber") ||
+         (wire.type || "").toLowerCase().includes("fbr") ||
+         (wire.type || "").toLowerCase().includes("optic")) ||
+        // Description checks
+        (descriptionStr.includes("fiber") ||
+         descriptionStr.includes("fbr") ||
+         descriptionStr.includes("optic") ||
+         descriptionStr.includes("ft") ||
+         descriptionStr.includes("ct")) ||
+        // Size format checks
+        (sizeStr.includes("fiber") || 
+         sizeStr.includes("fbr") ||
+         sizeStr.includes("ct") ||
+         (sizeStr.match(/\d+\s*ct/i) !== null) ||
+         (sizeStr.match(/\d+\s*fiber/i) !== null)) ||
+        // ClientItem indicators
+        (clientItemSizeStr.includes("fiber") ||
+         clientItemSizeStr.includes("fbr") ||
+         clientItemSizeStr.includes("ct") ||
+         clientItemSizeStr.match(/\d+\s*ct/i) !== null ||
+         clientItemSizeStr.match(/\d+\s*fiber/i) !== null) ||
+        // ClientItem type checks
+        (clientItemTypeStr.includes("fiber") ||
+         clientItemTypeStr.includes("fbr") ||
+         clientItemTypeStr.includes("optic"));
       
-      // Look for numbers followed by "ct" or "fiber" in clientItem fields
+      // Check for fiber count indicators in strings
       const hasCountIndicator = 
-        clientItemSizeStr.match(/\d+\s*ct/i) ||
-        clientItemSizeStr.match(/\d+\s*fiber/i) ||
-        clientItemSizeStr.match(/\d+\s*fo/i) ||
-        clientItemSizeStr.match(/\d+\s*fbr/i) ||
-        clientItemTypeStr.match(/\d+\s*ct/i) ||
-        clientItemTypeStr.match(/\d+\s*fiber/i) ||
-        clientItemTypeStr.match(/\d+\s*fo/i) ||
-        clientItemTypeStr.match(/\d+\s*fbr/i);
+        extractFiberSize(wire) > 0; // If our utility can extract a size, it's likely a fiber
       
       const result = isATTGigapower || isFiber || hasCountIndicator;
       
@@ -294,100 +191,6 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
     return fiberWires;
   };
   
-  // Extract fiber size from a wire object - enhanced to handle more formats
-  const extractFiberSize = (wire: PoleWire): number => {
-    // Try to extract from various wire properties in priority order with clientItem.id added
-    const sizeStrings = [
-      // Note: clientItem doesn't have an id property per the interface
-      wire.clientItem?.size,  // ClientItem size is often reliable
-      wire.size,              // Size field directly
-      wire.description,       // Sometimes encoded in description
-      wire.type,              // Rarely in type but check anyway
-      wire.clientItem?.type   // Sometimes in type
-    ].filter(Boolean) as string[];
-    
-    console.log(`Extracting size from wire (${wire.owner?.id || "Unknown owner"})`, {
-      size: wire.size,
-      clientItemSize: wire.clientItem?.size,
-      clientItemType: wire.clientItem?.type,
-      description: wire.description
-    });
-    
-    // Try various formats with priority
-    for (const str of sizeStrings) {
-      // Format: "6M EHS - 48ct GIG, 72ct GIG" - extract all numbers followed by "ct"
-      const ctMatches = str.match(/(\d+)\s*ct/gi);
-      if (ctMatches && ctMatches.length > 0) {
-        // Sum up all the fiber counts
-        const counts = ctMatches.map(match => {
-          const num = match.match(/(\d+)/);
-          return num ? parseInt(num[1], 10) : 0;
-        });
-        
-        const totalCount = counts.reduce((sum, count) => sum + count, 0);
-        console.log(`Found ${counts.join('+')}=${totalCount} in "${str}"`);
-        return totalCount;
-      }
-      
-      // Format: "ATT 144 FIBER" or "ATT 144-fiber" or "144 FBR" or "144F"
-      const fiberMatch = str.match(/(\d+)[\s-]*(fiber|fbr|f\b)/i);
-      if (fiberMatch && fiberMatch[1]) {
-        console.log(`Found ${fiberMatch[1]} fibers in "${str}"`);
-        return parseInt(fiberMatch[1], 10);
-      }
-      
-      // Format: "ADSS-96" or similar formats with fiber type/name + count
-      const adssMatch = str.match(/adss[\s-]*(\d+)/i);
-      if (adssMatch && adssMatch[1]) {
-        console.log(`Found ADSS fiber count ${adssMatch[1]} in "${str}"`);
-        return parseInt(adssMatch[1], 10);
-      }
-      
-      // Format: sometimes just a number followed by space then the word "count" or a fiber indication
-      const countMatch = str.match(/(\d+)[\s-]*(count|cable|strand|ct)/i);
-      if (countMatch && countMatch[1]) {
-        console.log(`Found count ${countMatch[1]} in "${str}"`);
-        return parseInt(countMatch[1], 10);
-      }
-      
-      // Any number that appears in a Gigapower or AT&T fiber related string is very likely to be the count
-      if ((str.toLowerCase().includes('gig') || 
-           str.toLowerCase().includes('att') || 
-           str.toLowerCase().includes('at&t') || 
-           str.toLowerCase().includes('fiber') || 
-           str.toLowerCase().includes('fbr')) && 
-          !str.toLowerCase().includes('messenger')) {
-        const numMatch = str.match(/(\d+)/);
-        if (numMatch && numMatch[1]) {
-          const num = parseInt(numMatch[1], 10);
-          if (num >= 12) {
-            console.log(`Found likely fiber count ${num} in "${str}"`);
-            return num;
-          }
-        }
-      }
-      
-      // Look for specific patterns like "144ct" or "96f" without spaces
-      const compactFiberMatch = str.match(/(\d+)(ct|f|fiber|fbr)/i);
-      if (compactFiberMatch && compactFiberMatch[1]) {
-        console.log(`Found compact fiber count ${compactFiberMatch[1]} in "${str}"`);
-        return parseInt(compactFiberMatch[1], 10);
-      }
-      
-      // Last resort: if we know it's a fiber wire, and find a number like "48" alone
-      const numMatch = str.match(/(\d+)/);
-      if (numMatch && numMatch[1]) {
-        // Fiber counts are rarely below 12 and fraction sizes like "3/8" are not counts
-        const num = parseInt(numMatch[1], 10);
-        if (num >= 12 && !str.includes('/')) {
-          console.log(`Found number ${num} in "${str}" - might be a fiber count`);
-          return num;
-        }
-      }
-    }
-    
-    return 0;
-  };
   
   // For debugging
   const [debugInfo, setDebugInfo] = useState<string>("");

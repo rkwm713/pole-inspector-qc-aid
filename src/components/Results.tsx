@@ -1,11 +1,12 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole, ValidationResults, QCCheckStatus, KmzFiberData } from "@/types";
 import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
 import { QCSummary } from "./QCSummary";
+import { FiberComparisonTable, FiberSizeChange } from "./FiberComparisonTable";
 import { AlertCircle, AlertTriangle, Check, Download, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -41,6 +42,16 @@ interface SPIDAWireEndPoint {
   environment?: string;
 }
 
+interface SPIDAWire {
+  id: string;
+  clientItem?: {
+    size?: string;
+    type?: string;
+  };
+  size?: string;
+  description?: string;
+}
+
 interface EnvironmentChange {
   poleId: string;
   wepId: string; // 'pole' for pole properties
@@ -56,9 +67,11 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
   
   // Keep track of all environment changes
   const [environmentChanges, setEnvironmentChanges] = useState<EnvironmentChange[]>([]);
+  // Keep track of fiber size changes
+  const [fiberSizeChanges, setFiberSizeChanges] = useState<FiberSizeChange[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
-  // Tabs for switching between QC overview and pole details
+  // Tabs for switching between QC overview, pole details, and fiber comparison
   const [activeTab, setActiveTab] = useState<string>("overview");
 
   // Update local poles state when props change
@@ -114,7 +127,14 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
     });
   };
 
-  // Generate updated JSON with environment changes
+  // Handle fiber size changes
+  const handleFiberSizeChange = useCallback((changes: FiberSizeChange[]) => {
+    // Add the new changes to the existing ones
+    setFiberSizeChanges(prev => [...prev, ...changes]);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  // Generate updated JSON with environment and fiber size changes
   const generateUpdatedJson = () => {
     if (!originalJsonData) return null;
     
@@ -157,6 +177,60 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
                   }
                 }
               });
+            }
+          }
+        }
+      }
+    });
+    
+    // Apply all fiber size changes to the JSON
+    fiberSizeChanges.forEach(change => {
+      const { fromPoleLabel, toPoleLabel, designLayer, newFiberSize, wireIds } = change;
+      
+      // Find the pole in the JSON
+      if (updatedJson.leads && Array.isArray(updatedJson.leads) && updatedJson.leads.length > 0) {
+        const locations = updatedJson.leads[0].locations;
+        if (Array.isArray(locations)) {
+          // Find the pole by its label
+          const poleIndex = locations.findIndex(
+            (loc: SPIDALocation) => loc.label === fromPoleLabel || loc.id === fromPoleLabel
+          );
+          
+          if (poleIndex !== -1) {
+            const designs = locations[poleIndex].designs;
+            if (Array.isArray(designs)) {
+              // Find the specific design layer (PROPOSED or REMEDY)
+              const designIndex = designs.findIndex(
+                d => d.label === designLayer || d.label === designLayer.toLowerCase()
+              );
+              
+              if (designIndex !== -1 && designs[designIndex].structure?.wires) {
+                // Update each wire in the wireIds array
+                wireIds.forEach(wireId => {
+                  const wireIndex = designs[designIndex].structure.wires.findIndex(
+                    (w: SPIDAWire) => w.id === wireId
+                  );
+                  
+                  if (wireIndex !== -1) {
+                    const wire = designs[designIndex].structure.wires[wireIndex];
+                    
+                    // Update the fiber size in the appropriate field
+                    // We'll update all possible fields where size might be stored
+                    if (wire.clientItem) {
+                      wire.clientItem.size = newFiberSize;
+                    }
+                    wire.size = newFiberSize;
+                    
+                    // Update description if it contains fiber size information
+                    if (wire.description && 
+                        (wire.description.includes('fiber') || 
+                         wire.description.includes('ct') || 
+                         wire.description.includes('fbr'))) {
+                      wire.description = newFiberSize;
+                    }
+                  }
+                });
+              }
             }
           }
         }
@@ -238,6 +312,9 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
             <TabsTrigger value="details" className="px-6">
               Pole Details
             </TabsTrigger>
+            <TabsTrigger value="fiber" className="px-6">
+              Fiber Comparison
+            </TabsTrigger>
           </TabsList>
           
           <div className="text-sm text-muted-foreground">
@@ -249,16 +326,49 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
           <QCSummary poles={poles} />
         </TabsContent>
         
+        <TabsContent value="fiber" className="mt-0">
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Fiber Size Comparison</CardTitle>
+              <CardDescription>
+                Comparison between pole fiber size (from JSON) and midspan fiber size (from KMZ)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {kmzFiberData && kmzFiberData.length > 0 ? (
+                <FiberComparisonTable 
+                  poles={poles} 
+                  kmzData={kmzFiberData} 
+                  originalJsonData={originalJsonData}
+                  onFiberSizeChange={handleFiberSizeChange}
+                />
+              ) : (
+                <div className="text-center p-4 text-muted-foreground">
+                  <p>No KMZ data available. Please upload a KMZ file using the button in the map view.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
         <TabsContent value="details" className="mt-0">
           {/* Save/Download button for environment changes */}
-          {hasUnsavedChanges && (
+              {(hasUnsavedChanges || fiberSizeChanges.length > 0) && (
             <Card className="mb-4 bg-amber-50 border-amber-200">
               <CardContent className="p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-medium">Unsaved Environment Changes</h3>
+                    <h3 className="font-medium">Unsaved Changes</h3>
                     <p className="text-sm text-muted-foreground">
-                      You have made {environmentChanges.length} change{environmentChanges.length !== 1 ? 's' : ''} to environment values
+                      {environmentChanges.length > 0 && (
+                        <span>Environment changes: {environmentChanges.length}</span>
+                      )}
+                      {environmentChanges.length > 0 && fiberSizeChanges.length > 0 && (
+                        <span> | </span>
+                      )}
+                      {fiberSizeChanges.length > 0 && (
+                        <span>Fiber size changes: {fiberSizeChanges.length}</span>
+                      )}
                     </p>
                   </div>
                   <Button onClick={handleDownloadJson} className="ml-4">

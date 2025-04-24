@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { KmzDataViewer } from "@/components/KmzDataViewer";
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap, Tooltip } from "react-leaflet";
 import { Pole, WireEndPoint, PoleWire, KmzFiberData } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -204,7 +203,6 @@ export function MapView({
   const [kmzLoadError, setKmzLoadError] = useState<string | null>(null);
   const [kmzFileName, setKmzFileName] = useState<string | null>(null);
   const [kmzFiberData, setKmzFiberData] = useState<KmzFiberData[]>([]);
-  const [isKmzDataViewerOpen, setIsKmzDataViewerOpen] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   
@@ -650,17 +648,8 @@ export function MapView({
                 
                 {kmzFileName && (
                   <div className="flex items-center ml-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setIsKmzDataViewerOpen(true)}
-                      className="text-xs flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700"
-                    >
-                      <MapPin className="h-3 w-3" />
-                      View Fiber Data
-                    </Button>
-                    <span className="ml-2 text-xs text-gray-500">
-                      ({kmzFileName})
+                    <span className="text-xs text-gray-500">
+                      KMZ/KML File: {kmzFileName}
                     </span>
                   </div>
                 )}
@@ -1105,16 +1094,6 @@ export function MapView({
         </CardContent>
       </Card>
       
-      {/* KMZ Data Viewer Dialog */}
-      {isKmzLoaded && (
-        <KmzDataViewer
-          isOpen={isKmzDataViewerOpen}
-          onClose={() => setIsKmzDataViewerOpen(false)}
-          kmzData={kmzFiberData}
-          fileName={kmzFileName}
-          poles={poles} // Pass poles data for comparison
-        />
-      )}
     </>
   );
 }
