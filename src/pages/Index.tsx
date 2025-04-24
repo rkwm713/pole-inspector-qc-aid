@@ -1,8 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { Results } from "@/components/Results";
-import { Pole, ProjectInfo, ParsedData } from "@/types";
+import { Pole, ProjectInfo, ParsedData, KmzFiberData } from "@/types";
 import { extractPoleData, validatePoleData } from "@/utils/parsers";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,17 @@ const Index = () => {
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({});
   const [fileUploaded, setFileUploaded] = useState(false);
   const [originalJsonData, setOriginalJsonData] = useState<Record<string, unknown> | undefined>(undefined);
+  const [kmzFiberData, setKmzFiberData] = useState<KmzFiberData[]>([]);
+  
+  // Revalidate poles when KMZ data changes
+  useEffect(() => {
+    // Skip validation if no poles or no KMZ data
+    if (poles.length === 0 || kmzFiberData.length === 0) return;
+    
+    // Re-run validation with KMZ data
+    const revalidatedPoles = validatePoleData({ poles, projectInfo }, kmzFiberData);
+    setPoles(revalidatedPoles);
+  }, [kmzFiberData]);
 
   const handleFileLoaded = async (jsonData: Record<string, unknown>) => {
     setIsProcessing(true);
@@ -81,7 +92,9 @@ const Index = () => {
             
             <Results 
               poles={poles} 
-              originalJsonData={originalJsonData} 
+              originalJsonData={originalJsonData}
+              kmzFiberData={kmzFiberData}
+              onKmzDataParsed={setKmzFiberData}
             />
           </div>
         )}

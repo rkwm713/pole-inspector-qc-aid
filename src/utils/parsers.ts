@@ -12,7 +12,8 @@ import {
   QCCheckStatus,
   WireEndPoint,
   ProjectInfo,
-  ParsedData
+  ParsedData,
+  KmzFiberData
 } from "@/types";
 
 import {
@@ -658,9 +659,10 @@ const extractClearanceResults = (clearanceResultsData: unknown[]): ClearanceResu
  * Validate pole data against PNM specifications
  * @param poles Array of pole objects
  * @param projectInfo Project information for validation
+ * @param kmzFiberData Optional KMZ fiber data for fiber size/count validation
  * @returns Array of validated pole objects with QC results
  */
-export const validatePoleData = (poleData: ParsedData): Pole[] => {
+export const validatePoleData = (poleData: ParsedData, kmzFiberData?: KmzFiberData[]): Pole[] => {
   const { poles, projectInfo } = poleData;
   
   return poles.map(pole => {
@@ -668,7 +670,7 @@ export const validatePoleData = (poleData: ParsedData): Pole[] => {
     const validatedPole = JSON.parse(JSON.stringify(pole)) as Pole;
     
     // Initialize QC results object using the imported function from qcChecks.ts
-    validatedPole.qcResults = runQCValidations(validatedPole, projectInfo);
+    validatedPole.qcResults = runQCValidations(validatedPole, projectInfo, kmzFiberData);
     
     return validatedPole;
   });

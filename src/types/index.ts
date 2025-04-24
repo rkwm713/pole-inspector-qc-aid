@@ -1,5 +1,17 @@
 // SPIDAcalc Data Types
 
+// KMZ Fiber data types
+export interface KmzFiberData {
+  poleId?: string;          // Identifier for the pole this data is associated with
+  coordinates: {            // Location of the fiber segment/feature
+    latitude: number;
+    longitude: number;
+  };
+  fiberSize: string;        // Size of the fiber (e.g., "96", "144")
+  fiberCount: number;       // Count of fibers
+  description?: string;     // Additional descriptive information
+}
+
 export type QCCheckStatus = "PASS" | "FAIL" | "WARNING" | "NOT_CHECKED";
 
 export interface PoleAttachment {
@@ -38,6 +50,7 @@ export interface PoleWire {
   };
   size?: string;
   type?: string;
+  description?: string; // Sometimes contains fiber counts/info
   tension?: number;
   clientItem?: {
     size?: string;
@@ -147,6 +160,7 @@ export interface QCResults {
   loadCaseCheck: QCCheckResult; // For load case verification
   projectSettingsCheck: QCCheckResult; // For project settings completeness
   messengerSizeCheck: QCCheckResult; // For messenger size verification
+  fiberSizeCheck: QCCheckResult; // For fiber size/count verification from KMZ
   overallStatus: QCCheckStatus;
   passCount: number;
   failCount: number;
@@ -183,7 +197,7 @@ export interface ProjectInfo {
   engineer?: string;
   comments?: string;
   generalLocation?: string;
-  address?: Record<string, any>; // Or a more specific address type if known
+  address?: Record<string, unknown>; // Generic address object
   defaultLoadCases?: string[]; // Assuming an array of strings for load cases
 }
 

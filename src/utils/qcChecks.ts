@@ -1,10 +1,12 @@
 // QC Checks for SPIDAcalc data
 import { 
   Pole, 
+  PoleWire,
   QCCheckResult, 
   QCCheckStatus, 
   QCResults,
-  ProjectInfo
+  ProjectInfo,
+  KmzFiberData
 } from "@/types";
 
 /**
@@ -459,6 +461,407 @@ export const checkMessengerSize = (pole: Pole): QCCheckResult => {
 };
 
 /**
+ * Check fiber size and count consistency between KMZ data and pole data,
+ * with specific attention to Gigapower fiber
+ */
+export const checkFiberSize = (pole: Pole, kmzFiberData?: KmzFiberData[]): QCCheckResult => {
+  const result: QCCheckResult = {
+    status: "NOT_CHECKED",
+    message: "Fiber size/count check not performed",
+    details: []
+  };
+  
+  // If no KMZ data is provided, we can't perform the check
+  if (!kmzFiberData || kmzFiberData.length === 0) {
+    return result;
+  }
+  
+  // Filter KMZ features that are relevant to this pole (by proximity or id)
+  const relevantFiberData = kmzFiberData.filter(fiberData => {
+    // If the KMZ data has an explicit poleId that matches, use that
+    if (fiberData.poleId && fiberData.poleId === pole.structureId) {
+      return true;
+    }
+    
+    // Otherwise, check by proximity if pole coordinates are available
+    if (pole.coordinates && fiberData.coordinates) {
+      // Calculate distance between pole and fiber feature (simple Euclidean for now)
+      const latDiff = pole.coordinates.latitude - fiberData.coordinates.latitude;
+      const lngDiff = pole.coordinates.longitude - fiberData.coordinates.longitude;
+      const distanceSquared = latDiff * latDiff + lngDiff * lngDiff;
+      
+      // Consider features within ~50 meters (very rough approximation)
+      const maxDistanceSquared = 0.0000005;  
+      return distanceSquared <= maxDistanceSquared;
+    }
+    
+    return false;
+  });
+  
+  if (relevantFiberData.length === 0) {
+    result.status = "WARNING";
+    result.message = "No fiber data found in KMZ near this pole";
+    return result;
+  }
+  
+  // Extract Gigapower-specific fiber data from KMZ (if available)
+  const gigapowerFiberData = relevantFiberData.filter(fiber => {
+    // Check c_sro field which often indicates Gigapower data with PSA_317
+    const sro = extractPropertyValue(fiber, "c_sro");
+    if (sro && sro.includes("PSA_317")) {
+      return true;
+    }
+    
+    // Then check various fields for Gigapower or ATT references
+    const description = fiber.description?.toLowerCase() || "";
+    return (
+      // Check description
+      description.includes("gigapower") || 
+      description.includes("att ") || // Space after ATT to avoid matches in words like "attachment"
+      // Check owner field
+      extractPropertyValue(fiber, "owner")?.toLowerCase().includes("gigapower") ||
+      extractPropertyValue(fiber, "owner")?.toLowerCase().includes("att") ||
+      // Check company field
+      extractPropertyValue(fiber, "company")?.toLowerCase().includes("gigapower") ||
+      extractPropertyValue(fiber, "company")?.toLowerCase().includes("att")
+    );
+  });
+  
+  if (gigapowerFiberData.length === 0) {
+    // If no Gigapower data, just note it but don't fail
+    result.status = "PASS";
+    result.message = "No Gigapower fiber data found in KMZ for this pole";
+    return result;
+  }
+  
+  // Get the cb_capafo value from KMZ data for Gigapower
+  const cbCapafoValue = getCapafoValue(gigapowerFiberData[0]);
+  
+  if (!cbCapafoValue) {
+    result.status = "WARNING";
+    result.message = "Gigapower fiber data found but no cb_capafo value available";
+    return result;
+  }
+  
+  // Check fiber size/count against proposed and remedy communication wires
+  const relevantLayers = ["PROPOSED", "REMEDY"];
+  let issues = 0;
+  let matchesFound = 0;
+  
+  // For each layer, get Gigapower/ATT fiber cables and sum their counts
+  relevantLayers.forEach(layerName => {
+    const layer = pole.layers[layerName];
+    if (!layer) return;
+    
+    // Find all potential fiber wires in this layer
+    const fiberWires = layer.wires.filter(wire => {
+      // Check for ATT or Gigapower indicators
+      const isATTGigapower = 
+        // Owner checks
+        ((wire.owner?.id?.toLowerCase() || "").includes("att") || 
+         (wire.owner?.id?.toLowerCase() || "").includes("gigapower")) ||
+        // External ID checks (attachment IDs often have the owner embedded)
+        ((wire.externalId?.toLowerCase() || "").includes("att") ||
+         (wire.externalId?.toLowerCase() || "").includes("gigapower")) ||
+        // Description checks
+        ((wire.description?.toLowerCase() || "").includes("att") ||
+         (wire.description?.toLowerCase() || "").includes("gigapower")) ||
+        // Size/clientItem checks for "GIG" indicators
+        ((wire.size?.toLowerCase() || "").includes("gig") ||
+         (wire.clientItem?.size?.toLowerCase() || "").includes("gig"));
+      
+      // Check for fiber indicators
+      const isFiber = 
+        // Type indicators
+        ((wire.type?.toLowerCase() || "").includes("fiber") ||
+         (wire.type?.toLowerCase() || "").includes("fbr") ||
+         (wire.type?.toLowerCase() || "").includes("optic")) ||
+        // Description indicators
+        ((wire.description?.toLowerCase() || "").includes("fiber") ||
+         (wire.description?.toLowerCase() || "").includes("fbr") ||
+         (wire.description?.toLowerCase() || "").includes("optic")) ||
+        // Size format indicators
+        (wire.size && (
+          wire.size.toLowerCase().includes("fiber") || 
+          wire.size.toLowerCase().includes("fbr") ||
+          wire.size.toLowerCase().includes("ct") ||
+          (wire.size.match(/\d+\s*ct/i) !== null) ||
+          (wire.size.match(/\d+\s*fiber/i) !== null)
+        )) ||
+        // ClientItem indicators
+        (wire.clientItem?.size && (
+          wire.clientItem.size.toLowerCase().includes("fiber") ||
+          wire.clientItem.size.toLowerCase().includes("fbr") ||
+          wire.clientItem.size.toLowerCase().includes("ct") ||
+          (wire.clientItem.size.match(/\d+\s*ct/i) !== null) ||
+          (wire.clientItem.size.match(/\d+\s*fiber/i) !== null)
+        )) ||
+        // ClientItem type indicators
+        ((wire.clientItem?.type?.toLowerCase() || "").includes("fiber") ||
+         (wire.clientItem?.type?.toLowerCase() || "").includes("fbr") ||
+         (wire.clientItem?.type?.toLowerCase() || "").includes("optic"));
+      
+      return isATTGigapower || isFiber;
+    });
+    
+    if (fiberWires.length === 0) {
+      result.details.push(`No fiber cables found in ${layerName} layer`);
+      return;
+    }
+    
+    // Extract fiber sizes and sum them
+    let totalFiberCount = 0;
+    const fiberCounts: number[] = [];
+    
+    fiberWires.forEach(wire => {
+      // Try to extract the fiber size from the wire
+      const fiberSize = extractEnhancedFiberSize(wire);
+      if (fiberSize > 0) {
+        totalFiberCount += fiberSize;
+        fiberCounts.push(fiberSize);
+      }
+    });
+    
+    // Compare with KMZ data
+    const kmzFiberCount = parseInt(cbCapafoValue, 10);
+    
+    if (totalFiberCount !== kmzFiberCount) {
+      issues++;
+      result.details.push(
+        `Fiber count mismatch in ${layerName}: SPIDAcalc has ${
+          fiberCounts.length > 1 
+            ? fiberCounts.join(' + ') + ' = ' + totalFiberCount 
+            : totalFiberCount
+        } fibers, but KMZ has ${kmzFiberCount} fibers (cb_capafo value)`
+      );
+    } else {
+      // Match found, log this as informational
+      matchesFound++;
+      result.details.push(
+        `Fiber count matches in ${layerName}: ${
+          fiberCounts.length > 1 
+            ? fiberCounts.join(' + ') + ' = ' + totalFiberCount 
+            : totalFiberCount
+        } fibers equals KMZ cb_capafo value of ${kmzFiberCount}`
+      );
+    }
+  });
+  
+  if (issues > 0) {
+    result.status = "FAIL";
+    result.message = `Found ${issues} fiber count inconsistencies`;
+  } else if (matchesFound > 0) {
+    result.status = "PASS";
+    result.message = "Fiber count matches KMZ data";
+  } else {
+    result.status = "WARNING";
+    result.message = "Fiber check completed with warnings";
+  }
+  
+  return result;
+};
+
+
+/**
+ * Extract an enhanced fiber size with support for various formats
+ * This is an enhanced version that handles more formats and patterns
+ */
+function extractEnhancedFiberSize(wire: PoleWire): number {
+  // Try to extract from various wire properties in priority order
+  const sizeStrings = [
+    wire.clientItem?.size,  // ClientItem size is often most reliable
+    wire.size,              // Size field directly
+    wire.description,       // Sometimes encoded in description
+    wire.type               // Rarely in type but check anyway
+  ].filter(Boolean) as string[];
+  
+  // Try various formats with priority
+  for (const str of sizeStrings) {
+    // Format: "6M EHS - 48ct GIG, 72ct GIG" - extract all numbers followed by "ct"
+    const ctMatches = str.match(/(\d+)\s*ct/gi);
+    if (ctMatches && ctMatches.length > 0) {
+      // Sum up all the fiber counts
+      const counts = ctMatches.map(match => {
+        const num = match.match(/(\d+)/);
+        return num ? parseInt(num[1], 10) : 0;
+      });
+      
+      const totalCount = counts.reduce((sum, count) => sum + count, 0);
+      return totalCount;
+    }
+    
+    // Format: "48 fiber" or "48-fiber" or "48 FBR" or "48F"
+    const fiberMatch = str.match(/(\d+)[\s-]*(fiber|fbr|f\b)/i);
+    if (fiberMatch && fiberMatch[1]) {
+      return parseInt(fiberMatch[1], 10);
+    }
+    
+    // Format: "ADSS-96" or similar formats with fiber type/name + count
+    const adssMatch = str.match(/adss[\s-]*(\d+)/i);
+    if (adssMatch && adssMatch[1]) {
+      return parseInt(adssMatch[1], 10);
+    }
+    
+    // Format: sometimes just a number followed by space then the word "count" or a fiber indication
+    const countMatch = str.match(/(\d+)[\s-]*(count|cable|strand)/i);
+    if (countMatch && countMatch[1]) {
+      return parseInt(countMatch[1], 10);
+    }
+    
+    // Any number that appears in a Gigapower or AT&T fiber related string is very likely to be the count
+    if ((str.toLowerCase().includes('gig') || str.toLowerCase().includes('att')) && 
+        !str.toLowerCase().includes('messenger')) {
+      const numMatch = str.match(/(\d+)/);
+      if (numMatch && numMatch[1]) {
+        const num = parseInt(numMatch[1], 10);
+        if (num >= 12) {
+          return num;
+        }
+      }
+    }
+    
+    // Last resort: if we know it's a fiber wire, and find a number like "48" alone
+    const numMatch = str.match(/(\d+)/);
+    if (numMatch && numMatch[1]) {
+      // Fiber counts are rarely below 12 and fraction sizes like "3/8" are not counts
+      const num = parseInt(numMatch[1], 10);
+      if (num >= 12 && !str.includes('/')) {
+        return num;
+      }
+    }
+  }
+  
+  return 0;
+}
+
+/**
+ * Extract value from HTML table content
+ */
+function extractFromHtml(html: string, propName: string): string | null {
+  if (!html || typeof html !== 'string') return null;
+
+  // Check if it's HTML content
+  if (!html.includes('<html') && !html.includes('<table')) {
+    return null;
+  }
+  
+  try {
+    // For HTML table content, look for table cells with the property name
+    const pattern = new RegExp(`<td[^>]*>${propName}</td>\\s*<td[^>]*>(.*?)</td>`, 'i');
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  } catch (error) {
+    console.error("Error parsing HTML:", error);
+  }
+  
+  return null;
+}
+
+/**
+ * Extract property value from KMZ fiber data description
+ * This handles HTML, JSON, or plain text formats
+ */
+function extractPropertyValue(fiberData: KmzFiberData, propertyName: string): string | null {
+  if (!fiberData.description) return null;
+  
+  // First check if it's HTML content
+  const htmlValue = extractFromHtml(fiberData.description, propertyName);
+  if (htmlValue) return htmlValue;
+  
+  // Then check if it's JSON content
+  try {
+    if (fiberData.description.trim().startsWith('{') && fiberData.description.trim().endsWith('}')) {
+      const descObj = JSON.parse(fiberData.description);
+      if (propertyName in descObj) {
+        return descObj[propertyName]?.toString() || "";
+      }
+    }
+  } catch {
+    // Not a JSON string, check if the property name appears in the description
+    const regex = new RegExp(`${propertyName}[\\s:=]+(\\w+)`, 'i');
+    const match = fiberData.description.match(regex);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Get the cb_capafo value (fiber size) from KMZ data
+ */
+function getCapafoValue(fiberData: KmzFiberData): string | null {
+  // First try to get it from HTML if it's HTML content
+  if (fiberData.description && fiberData.description.includes('<html')) {
+    const htmlValue = extractFromHtml(fiberData.description, "cb_capafo");
+    if (htmlValue) return htmlValue;
+  }
+  
+  // Then check if it's in the description as a JSON property or plain text
+  const propValue = extractPropertyValue(fiberData, "cb_capafo");
+  if (propValue) return propValue;
+  
+  // If not found in description properties, use the fiberSize directly
+  return fiberData.fiberSize || null;
+}
+
+/**
+ * Helper function to extract fiber size from a wire object
+ */
+function extractFiberSize(wire: PoleWire): string | null {
+  // Try to extract from various wire properties in priority order
+  const sizeStrings = [
+    wire.clientItem?.size,  // ClientItem size is often most reliable
+    wire.size,              // Size field directly
+    wire.description,       // Sometimes encoded in description
+    wire.type               // Rarely in type but check anyway
+  ].filter(Boolean) as string[];
+  
+  for (const str of sizeStrings) {
+    // Format: "6M EHS - 48ct GIG, 72ct GIG" - extract all numbers followed by "ct"
+    const ctMatches = str.match(/(\d+)\s*ct/gi);
+    if (ctMatches && ctMatches.length > 0) {
+      // Sum up all the fiber counts
+      const counts = ctMatches.map(match => {
+        const num = match.match(/(\d+)/);
+        return num ? parseInt(num[1], 10) : 0;
+      });
+      
+      const totalCount = counts.reduce((sum, count) => sum + count, 0);
+      return totalCount.toString();
+    }
+    
+    // Format: "48 fiber" or "48-fiber" or "48 FBR"
+    const fiberMatch = str.match(/(\d+)[\s-]*(fiber|fbr)/i);
+    if (fiberMatch && fiberMatch[1]) {
+      return fiberMatch[1];
+    }
+    
+    // Format: sometimes just a number followed by space then the word "count" or a fiber indication
+    const countMatch = str.match(/(\d+)[\s-]*(count|cable|strand)/i);
+    if (countMatch && countMatch[1]) {
+      return countMatch[1];
+    }
+    
+    // Last resort: if we know it's a fiber wire, and find a number like "48" alone
+    const numMatch = str.match(/(\d+)/);
+    if (numMatch && numMatch[1]) {
+      // Try to be a bit smarter - if the number is likely a size reference (e.g. 1/4, 3/8)
+      // we should ignore it. Fiber counts are rarely below 12.
+      const num = parseInt(numMatch[1], 10);
+      if (num >= 12 && str.includes('/') === false) {
+        return numMatch[1];
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Initialize an empty QC check result
  */
 export const initCheckResult = (): QCCheckResult => ({
@@ -470,7 +873,7 @@ export const initCheckResult = (): QCCheckResult => ({
 /**
  * Run all QC checks on a pole and generate comprehensive results
  */
-export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo): QCResults => {
+export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo, kmzFiberData?: KmzFiberData[]): QCResults => {
   // Initialize empty check results with default values
   const qcResults: QCResults = {
     ownerCheck: initCheckResult(),
@@ -491,6 +894,7 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo): QCResults => 
     loadCaseCheck: initCheckResult(),
     projectSettingsCheck: initCheckResult(),
     messengerSizeCheck: initCheckResult(),
+    fiberSizeCheck: initCheckResult(),
     overallStatus: "NOT_CHECKED",
     passCount: 0,
     failCount: 0,
@@ -506,6 +910,7 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo): QCResults => 
   qcResults.loadCaseCheck = checkLoadCases(pole, projectInfo);
   qcResults.projectSettingsCheck = checkProjectSettings(projectInfo);
   qcResults.messengerSizeCheck = checkMessengerSize(pole);
+  qcResults.fiberSizeCheck = checkFiberSize(pole, kmzFiberData);
   
   // Count results by status
   const countResults = (results: QCResults): void => {
@@ -527,7 +932,8 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo): QCResults => 
       results.stationNameCheck,
       results.loadCaseCheck,
       results.projectSettingsCheck,
-      results.messengerSizeCheck
+      results.messengerSizeCheck,
+      results.fiberSizeCheck
     ];
     
     results.passCount = checks.filter(check => check.status === "PASS").length;

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pole, ValidationResults, QCCheckStatus } from "@/types";
+import { Pole, ValidationResults, QCCheckStatus, KmzFiberData } from "@/types";
 import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
 import { QCSummary } from "./QCSummary";
@@ -15,6 +15,8 @@ interface ResultsProps {
   poles: Pole[];
   validationResults?: ValidationResults;
   originalJsonData?: Record<string, unknown>;
+  kmzFiberData?: KmzFiberData[];
+  onKmzDataParsed?: (data: KmzFiberData[]) => void;
 }
 
 // Interfaces for SPIDAcalc JSON structure
@@ -46,7 +48,7 @@ interface EnvironmentChange {
   newEnvironment: string;
 }
 
-export function Results({ poles: initialPoles, validationResults, originalJsonData }: ResultsProps) {
+export function Results({ poles: initialPoles, validationResults, originalJsonData, kmzFiberData, onKmzDataParsed }: ResultsProps) {
   const [poles, setPoles] = useState<Pole[]>(initialPoles);
   const [selectedPoleId, setSelectedPoleId] = useState<string | undefined>(
     poles.length > 0 ? poles[0].structureId : undefined
@@ -322,6 +324,7 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
                 selectedPoleId={selectedPoleId}
                 onSelectPole={handlePoleSelect}
                 onEnvironmentChange={handleEnvironmentChange}
+                onKmzDataParsed={onKmzDataParsed}
                 initialZoom={17} // Close-up zoom level when viewing the first pole
               />
             </div>

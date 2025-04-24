@@ -54,7 +54,8 @@ export function QCSummary({ poles }: QCSummaryProps) {
       qc.stationNameCheck,
       qc.loadCaseCheck,
       qc.projectSettingsCheck,
-      qc.messengerSizeCheck
+      qc.messengerSizeCheck,
+      qc.fiberSizeCheck
     ].filter(check => check !== undefined);
     
     checks.forEach(check => {
@@ -87,7 +88,8 @@ export function QCSummary({ poles }: QCSummaryProps) {
       { key: "assemblyUnitsCheck", name: "Assembly Units" },
       { key: "glcCheck", name: "Ground-Line Circumference" },
       { key: "tensionCheck", name: "Wire Tensions" },
-      { key: "clearanceCheck", name: "Clearance Checks" }
+      { key: "clearanceCheck", name: "Clearance Checks" },
+      { key: "fiberSizeCheck", name: "Fiber Size/Count" }
     ];
     
     checkTypes.forEach(({ key, name }) => {
