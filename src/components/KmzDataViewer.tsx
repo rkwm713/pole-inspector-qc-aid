@@ -117,18 +117,27 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
     );
   };
   
-  // Function to calculate distance between two coordinate points
+  // Enhanced function to calculate distance between two coordinate points
   const calculateDistance = (
     lat1: number, lon1: number, 
     lat2: number, lon2: number
   ): number => {
-    // For comparison, use a simple proximity measure
-    // that works better with potentially different coordinate systems
+    // Reduce sensitivity to minor coordinate differences
+    // Use fewer decimal places for comparison to account for precision variations
+    const precision = 5; // 5 decimal places (~1.1 meter precision)
+    
+    // Round coordinates to specified precision
+    const roundedLat1 = Math.round(lat1 * Math.pow(10, precision)) / Math.pow(10, precision);
+    const roundedLon1 = Math.round(lon1 * Math.pow(10, precision)) / Math.pow(10, precision);
+    const roundedLat2 = Math.round(lat2 * Math.pow(10, precision)) / Math.pow(10, precision);
+    const roundedLon2 = Math.round(lon2 * Math.pow(10, precision)) / Math.pow(10, precision);
+    
+    // Scale factor for more readable numbers
     const scaleFactor = 100000; // Scale up for more readable numbers
     
-    // Calculate normalized distance
-    const latDiff = Math.abs(lat1 - lat2) * scaleFactor;
-    const lonDiff = Math.abs(lon1 - lon2) * scaleFactor;
+    // Calculate normalized distance with rounded coordinates
+    const latDiff = Math.abs(roundedLat1 - roundedLat2) * scaleFactor;
+    const lonDiff = Math.abs(roundedLon1 - roundedLon2) * scaleFactor;
     
     // Use squared distance to avoid square root operation
     return (latDiff * latDiff) + (lonDiff * lonDiff);
@@ -139,15 +148,45 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
     if (!pole) return [];
     
     const layer = pole.layers[layerName];
-    if (!layer || !layer.wires || layer.wires.length === 0) {
+    
+    // Deep debugging of layer structure
+    console.log(`Layer structure debug for ${pole?.structureId} in ${layerName}:`, {
+      hasLayer: !!layer,
+      layerKeys: layer ? Object.keys(layer) : 'N/A',
+      hasWiresDirectly: layer?.wires?.length > 0,
+      hasStructureProp: !!layer?.structure,
+      hasNestedWires: layer?.structure?.wires?.length > 0,
+      wireCountDirect: layer?.wires?.length || 0,
+      wireCountNested: layer?.structure?.wires?.length || 0
+    });
+    
+    if (!layer) {
+      console.log(`No ${layerName} layer found for pole ${pole.structureId}`);
+      return [];
+    }
+    
+    // Check both direct wires and nested structure.wires
+    let wires: PoleWire[] = [];
+    
+    // Try direct access first
+    if (layer.wires && layer.wires.length > 0) {
+      wires = layer.wires;
+    } 
+    // Fall back to nested structure if direct access fails
+    else if (layer.structure && layer.structure.wires && layer.structure.wires.length > 0) {
+      console.log(`Found wires in nested structure for ${pole.structureId} in ${layerName}`);
+      wires = layer.structure.wires;
+    }
+    
+    if (wires.length === 0) {
       console.log(`No wires found in ${layerName} layer for pole ${pole.structureId}`);
       return [];
     }
     
-    console.log(`Examining ${layer.wires.length} wires in ${layerName} for pole ${pole.structureId}`);
+    console.log(`Examining ${wires.length} wires in ${layerName} for pole ${pole.structureId}`);
     
     // Log all wires for more detailed debugging
-    const allWires = layer.wires.map(w => ({
+    const allWires = wires.map(w => ({
       id: w.id,
       owner: w.owner?.id,
       size: w.size || "No size",
@@ -160,7 +199,7 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
     console.log(`All wires for ${pole.structureId} in ${layerName}:`, allWires);
     
     // Get all fiber wires - enhanced detection for AT&T/Gigapower and general fiber indicators
-    const fiberWires = layer.wires.filter((wire: PoleWire) => {
+    const fiberWires = wires.filter((wire: PoleWire) => {
       // Check if it's Gigapower/AT&T with more flexible matching
       const ownerStr = (wire.owner?.id || "").toLowerCase();
       const externalIdStr = (wire.externalId || "").toLowerCase();
@@ -399,9 +438,40 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
       description: e.description ? e.description.substring(0, 50) + "..." : "No description"
     })));
 
-    // Distance threshold - determines how close a pole needs to be to a KMZ point to be considered a match
-    // Using a very generous threshold since we're using scaled coordinates
-    const distanceThreshold = 5000; // Increased threshold for more generous matching
+    // Distance debugging for H14C378
+    interface DistanceDebugItem {
+      poleId: string;
+      kmzCoords: string;
+      distance: number;
+      cbCapafo: string;
+    }
+    
+    const distanceDebug: DistanceDebugItem[] = [];
+    
+    // If H14C378 is in the poles list, log distances to all KMZ points
+    const debugPole = poles.find(p => p.structureId === 'H14C378');
+    if (debugPole && debugPole.coordinates) {
+      validKmzEntries.forEach(kmz => {
+        const distance = calculateDistance(
+          kmz.coordinates.latitude, kmz.coordinates.longitude,
+          debugPole.coordinates!.latitude, debugPole.coordinates!.longitude
+        );
+        
+        distanceDebug.push({
+          poleId: debugPole.structureId,
+          kmzCoords: `${kmz.coordinates.latitude.toFixed(6)}, ${kmz.coordinates.longitude.toFixed(6)}`,
+          distance,
+          cbCapafo: getCbCapafo(kmz)
+        });
+      });
+      
+      console.log("Distance debug for H14C378:", distanceDebug.sort((a, b) => a.distance - b.distance));
+    }
+    
+    // Distance thresholds - determines how close a pole needs to be to a KMZ point to be considered a match
+    // Using two thresholds: initial stricter and fallback more generous
+    const closeDistanceThreshold = 5000; // Initial threshold
+    const farDistanceThreshold = 10000;  // Fallback threshold (doubled)
     
     // Log pole coordinates for debugging
     console.log("Available poles with coordinates:", poles
@@ -463,10 +533,21 @@ export function KmzDataViewer({ isOpen, onClose, kmzData, fileName, poles = [] }
       };
     });
     
-    // Keep entries with a pole match that are within our threshold
-    const withPoles = matches.filter(item => 
-      item.pole !== null && (item.matchType === "Direct ID match" || item.distance < distanceThreshold)
+    // First try with close threshold
+    let withPoles = matches.filter(item => 
+      item.pole !== null && (item.matchType === "Direct ID match" || item.distance < closeDistanceThreshold)
     );
+    
+    // If we don't have enough matches, try with more generous threshold
+    if (withPoles.length < validKmzEntries.length * 0.5) { // Less than 50% match rate
+      console.log(`First pass matching found only ${withPoles.length} matches out of ${validKmzEntries.length} KMZ entries. Trying more generous threshold.`);
+      
+      withPoles = matches.filter(item => 
+        item.pole !== null && (item.matchType === "Direct ID match" || item.distance < farDistanceThreshold)
+      );
+      
+      console.log(`Second pass matching found ${withPoles.length} matches with poles within threshold`);
+    }
     
     debugMessage += `\nFound ${withPoles.length} matches with poles within threshold`;
     

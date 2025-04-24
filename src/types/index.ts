@@ -126,6 +126,10 @@ export interface PoleLayer {
   layerName: string;
   attachments: PoleAttachment[];
   wires: PoleWire[];
+  structure?: {
+    wires?: PoleWire[];
+    equipments?: unknown[]; // Using unknown instead of any for better type safety
+  };
   wireEndPoints?: WireEndPoint[];
   poleProperties?: PoleProperties;
   clearanceResults?: ClearanceResult[];
