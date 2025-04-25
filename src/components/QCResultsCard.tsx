@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { QCResults, QCCheckResult, QCCheckStatus } from "@/types";
-import { AlertCircle, AlertTriangle, Check, ExternalLink, HelpCircle } from "lucide-react";
+import { QCResults, QCCheckResult, QCCheckStatus, Pole } from "@/types";
+import { AlertCircle, AlertTriangle, Check, ExternalLink, HelpCircle, RefreshCw } from "lucide-react";
 import { 
   Accordion, 
   AccordionContent, 
@@ -8,12 +8,16 @@ import {
   AccordionTrigger 
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { reorderWireEndPointsForLocation, SPIDAcalcData, Location, Design } from "@/utils/dataCorrections";
 
 interface QCResultsCardProps {
   results?: QCResults;
+  jsonData?: SPIDAcalcData; // The full JSON data object
+  onDataUpdate?: (updatedData: SPIDAcalcData) => void; // Callback to update the JSON data
 }
 
-export function QCResultsCard({ results }: QCResultsCardProps) {
+export function QCResultsCard({ results, jsonData, onDataUpdate }: QCResultsCardProps) {
   if (!results) {
     return (
       <Card>
@@ -80,11 +84,13 @@ export function QCResultsCard({ results }: QCResultsCardProps) {
       case "loadCaseCheck": return "Load Case Verification";
       case "projectSettingsCheck": return "Project Settings Completeness";
       case "messengerSizeCheck": return "Messenger Size Verification";
+      case "wireEndPointOrderCheck": return "Wire End Point Order";
+      case "fiberSizeCheck": return "Fiber Size Verification";
       default: return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
     }
   };
 
-  // Get ordered list of checks
+  // Get ordered list of checks (excluding wireEndPointOrderCheck which will be displayed separately)
   const orderedChecks = [
     // Original checks
     { key: "ownerCheck" as keyof QCResults, result: results.ownerCheck },
@@ -105,6 +111,7 @@ export function QCResultsCard({ results }: QCResultsCardProps) {
     { key: "loadCaseCheck" as keyof QCResults, result: results.loadCaseCheck },
     { key: "projectSettingsCheck" as keyof QCResults, result: results.projectSettingsCheck },
     { key: "messengerSizeCheck" as keyof QCResults, result: results.messengerSizeCheck },
+    { key: "fiberSizeCheck" as keyof QCResults, result: results.fiberSizeCheck },
   ].filter(check => check.result && check.result.status !== "NOT_CHECKED");
 
   // Sort checks by status (FAIL first, then WARNING, then PASS)
@@ -163,19 +170,57 @@ export function QCResultsCard({ results }: QCResultsCardProps) {
                   <AccordionTrigger className="py-2">
                     <div className="flex items-center text-left">
                       <div className="mr-2">{getStatusIcon(result.status)}</div>
-                      <div>
-                        <span className="font-medium">{getCheckName(key)}</span>
-                        <p className={`text-xs ${statusClass}`}>{result.message}</p>
-                      </div>
+                    <div>
+                      <span className="font-medium">{getCheckName(key)}</span>
+                      <p className={`text-xs ${statusClass}`}>{result.message}</p>
+                    </div>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
                     {result.details.length > 0 ? (
-                      <ul className="list-disc pl-6 space-y-1 text-sm">
-                        {result.details.map((detail, index) => (
-                          <li key={index}>{detail}</li>
-                        ))}
-                      </ul>
+                      <div className="space-y-3">
+                        <ul className="list-disc pl-6 space-y-1 text-sm">
+                          {result.details.map((detail, index) => (
+                            <li key={index}>{detail}</li>
+                          ))}
+                        </ul>
+                        
+                        {/* Add "Correct Order" button for wireEndPoint order mismatches */}
+                        {key === "wireEndPointOrderCheck" && 
+                         result.status === "FAIL" && 
+                         jsonData && 
+                         onDataUpdate && (
+                          <div className="mt-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="flex items-center space-x-1"
+                              onClick={() => {
+                                // Find the location with wireEndPoint order mismatch from details
+                                const locationDetail = result.details.find(d => d.includes("PROPOSED order"));
+                                if (locationDetail) {
+                                  // Location ID would be in the pole.structureId
+                                const locationId = jsonData.leads?.[0]?.locations?.find(
+                                  (loc: Location) => loc.designs?.some(
+                                    (d: Design) => d.label === "Proposed" && d.structure?.wireEndPoints
+                                  )
+                                )?.label;
+                                  
+                                  if (locationId) {
+                                    // Apply reordering
+                                    const correctedData = reorderWireEndPointsForLocation(jsonData, locationId);
+                                    // Update the JSON data through the callback
+                                    onDataUpdate(correctedData);
+                                  }
+                                }
+                              }}
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Correct Wire End Point Order
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No additional details available.</p>
                     )}

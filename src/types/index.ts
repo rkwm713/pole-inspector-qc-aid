@@ -165,6 +165,7 @@ export interface QCResults {
   projectSettingsCheck: QCCheckResult; // For project settings completeness
   messengerSizeCheck: QCCheckResult; // For messenger size verification
   fiberSizeCheck: QCCheckResult; // For fiber size/count verification from KMZ
+  wireEndPointOrderCheck: QCCheckResult; // For wireEndPoint order mismatches between Proposed and Remedy designs
   overallStatus: QCCheckStatus;
   passCount: number;
   failCount: number;
@@ -209,4 +210,52 @@ export interface ProjectInfo {
 export interface ParsedData {
   poles: Pole[];
   projectInfo: ProjectInfo;
+}
+
+// Types for Robust Span Comparison Logic
+
+/**
+ * Represents a wire change detected during comparison.
+ */
+export interface WireChange {
+  type: 'ADDED' | 'REMOVED' | 'MODIFIED';
+  poleId: string; // The ID of the pole where the change is observed
+  wireEndPointId: string; // The ID of the WireEndPoint involved
+  wire: PoleWire; // The wire data (current state for ADDED/MODIFIED, previous state for REMOVED)
+  previousWire?: PoleWire; // Previous state for MODIFIED
+  changeDetails?: string[]; // Specific details like "Height changed from X to Y"
+}
+
+/**
+ * Represents a physically identified span between two poles within a single design layer.
+ */
+export interface IdentifiedSpan {
+  spanId: string; // A unique identifier generated for this span instance (e.g., `${poleA_Id}_${wepA_Id}-${poleB_Id}_${wepB_Id}`)
+  poleA_Id: string;
+  poleA_WEP_Id: string; // WireEndPoint ID on Pole A pointing to B
+  poleB_Id: string;
+  poleB_WEP_Id: string; // WireEndPoint ID on Pole B pointing to A
+  // Optional: Add heuristics used for matching if needed (e.g., distance, direction)
+}
+
+/**
+ * Holds the comparison results for a single span matched between two design layers.
+ */
+export interface SpanComparisonResult {
+  proposedSpan?: IdentifiedSpan; // Identified span in the 'Proposed' layer
+  remedySpan?: IdentifiedSpan;   // Identified span in the 'Remedy' layer
+  poleA_Id: string; // ID of the first pole in the span
+  poleB_Id: string; // ID of the second pole in the span
+  changesAtPoleA: WireChange[]; // Changes observed at Pole A's end of the span
+  changesAtPoleB: WireChange[]; // Changes observed at Pole B's end of the span
+  spanStatus: 'MATCHED' | 'ADDED_IN_REMEDY' | 'REMOVED_IN_REMEDY'; // Status of the span itself
+}
+
+/**
+ * Top-level structure to hold all span comparison results between two designs.
+ */
+export interface DesignComparisonResults {
+  comparisonDescription: string; // e.g., "Proposed vs. Remedy Comparison"
+  spanResults: SpanComparisonResult[];
+  // Could add summary statistics here later if needed
 }

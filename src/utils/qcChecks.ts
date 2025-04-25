@@ -6,7 +6,8 @@ import {
   QCCheckStatus, 
   QCResults,
   ProjectInfo,
-  KmzFiberData
+  KmzFiberData,
+  WireEndPoint
 } from "@/types";
 
 /**
@@ -721,7 +722,8 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo, kmzFiberData?:
     loadCaseCheck: initCheckResult(),
     projectSettingsCheck: initCheckResult(),
     messengerSizeCheck: initCheckResult(),
-    fiberSizeCheck: initCheckResult(),
+  fiberSizeCheck: initCheckResult(),
+  wireEndPointOrderCheck: initCheckResult(),
     overallStatus: "NOT_CHECKED",
     passCount: 0,
     failCount: 0,
@@ -738,6 +740,7 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo, kmzFiberData?:
   qcResults.projectSettingsCheck = checkProjectSettings(projectInfo);
   qcResults.messengerSizeCheck = checkMessengerSize(pole);
   qcResults.fiberSizeCheck = checkFiberSize(pole, kmzFiberData);
+  qcResults.wireEndPointOrderCheck = checkWireEndPointOrder(pole);
   
   // Count results by status
   const countResults = (results: QCResults): void => {
@@ -760,7 +763,8 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo, kmzFiberData?:
       results.loadCaseCheck,
       results.projectSettingsCheck,
       results.messengerSizeCheck,
-      results.fiberSizeCheck
+      results.fiberSizeCheck,
+      results.wireEndPointOrderCheck
     ];
     
     results.passCount = checks.filter(check => check.status === "PASS").length;
@@ -782,3 +786,95 @@ export const runQCChecks = (pole: Pole, projectInfo: ProjectInfo, kmzFiberData?:
   countResults(qcResults);
   return qcResults;
 };
+
+/**
+ * Check if wireEndPoints in REMEDY design are in a different order from PROPOSED design
+ * This can cause comparison issues in SPIDAcalc
+ */
+export const checkWireEndPointOrder = (pole: Pole): QCCheckResult => {
+  const result: QCCheckResult = {
+    status: "NOT_CHECKED",
+    message: "Wire end point order check not performed",
+    details: []
+  };
+
+  // Check if both required layers exist
+  if (!pole.layers["PROPOSED"] || !pole.layers["REMEDY"]) {
+    result.message = "Missing PROPOSED or REMEDY layer for wire end point order check";
+    return result;
+  }
+
+  const proposedLayer = pole.layers["PROPOSED"];
+  const remedyLayer = pole.layers["REMEDY"];
+
+  // Make sure both layers have wireEndPoints
+  if (!proposedLayer.wireEndPoints || !Array.isArray(proposedLayer.wireEndPoints) || 
+      proposedLayer.wireEndPoints.length === 0) {
+    result.message = "No wireEndPoints found in PROPOSED layer";
+    return result;
+  }
+
+  if (!remedyLayer.wireEndPoints || !Array.isArray(remedyLayer.wireEndPoints) || 
+      remedyLayer.wireEndPoints.length === 0) {
+    result.message = "No wireEndPoints found in REMEDY layer";
+    return result;
+  }
+
+  // Extract IDs from both wireEndPoints arrays
+  const proposedIds = proposedLayer.wireEndPoints
+    .filter(wep => wep.id)
+    .map(wep => wep.id);
+  
+  const remedyIds = remedyLayer.wireEndPoints
+    .filter(wep => wep.id)
+    .map(wep => wep.id);
+
+  // Find common IDs that exist in both arrays
+  const commonIds = proposedIds.filter(id => remedyIds.includes(id));
+
+  // If there are no common IDs, we can't compare the order
+  if (commonIds.length === 0) {
+    result.status = "PASS";
+    result.message = "No matching wireEndPoints found between PROPOSED and REMEDY";
+    return result;
+  }
+
+  // Check if the order of common IDs is different between the two arrays
+  let orderMismatch = false;
+  const proposedOrder = proposedIds.filter(id => commonIds.includes(id));
+  const remedyOrder = remedyIds.filter(id => commonIds.includes(id));
+
+  // Check if the relative order is the same
+  for (let i = 0; i < proposedOrder.length - 1; i++) {
+    for (let j = i + 1; j < proposedOrder.length; j++) {
+      const id1 = proposedOrder[i];
+      const id2 = proposedOrder[j];
+      
+      const remedyIndex1 = remedyOrder.indexOf(id1);
+      const remedyIndex2 = remedyOrder.indexOf(id2);
+      
+      // If the relative order differs, we have a mismatch
+      if ((remedyIndex1 > remedyIndex2 && i < j) || 
+          (remedyIndex1 < remedyIndex2 && i > j)) {
+        orderMismatch = true;
+        break;
+      }
+    }
+    if (orderMismatch) break;
+  }
+
+  if (orderMismatch) {
+    result.status = "FAIL";
+    result.message = "WireEndPoints order mismatch detected between PROPOSED and REMEDY designs";
+    result.details.push(
+      `WireEndPoints in REMEDY design have a different order than in PROPOSED design`,
+      `PROPOSED order: ${proposedOrder.join(", ")}`,
+      `REMEDY order: ${remedyOrder.join(", ")}`
+    );
+  } else {
+    result.status = "PASS";
+    result.message = "WireEndPoints order is consistent between PROPOSED and REMEDY designs";
+  }
+
+  return result;
+}

@@ -1,9 +1,10 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { Results } from "@/components/Results";
-import { Pole, ProjectInfo, ParsedData, KmzFiberData } from "@/types";
+import { Pole, ProjectInfo, ParsedData, KmzFiberData, DesignComparisonResults, PoleLayer } from "@/types"; // Added DesignComparisonResults, PoleLayer
 import { extractPoleData, validatePoleData } from "@/utils/parsers";
+import { compareDesigns } from "@/utils/comparisonUtils"; // Import the comparison function
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,38 +15,82 @@ const Index = () => {
   const [fileUploaded, setFileUploaded] = useState(false);
   const [originalJsonData, setOriginalJsonData] = useState<Record<string, unknown> | undefined>(undefined);
   const [kmzFiberData, setKmzFiberData] = useState<KmzFiberData[]>([]);
-  
+  const [designComparisonResults, setDesignComparisonResults] = useState<DesignComparisonResults | null>(null); // State for comparison results
+
+  // Memoize validation logic to prevent unnecessary runs if dependencies don't change
+  const runValidation = useCallback((currentPoles: Pole[], currentProjectInfo: ProjectInfo, currentKmzData: KmzFiberData[]) => {
+    if (currentPoles.length === 0) return currentPoles; // No poles to validate
+
+    const dataToValidate: ParsedData = { poles: currentPoles, projectInfo: currentProjectInfo };
+    // Pass KMZ data only if it exists
+    const validated = validatePoleData(dataToValidate, currentKmzData.length > 0 ? currentKmzData : undefined);
+    return validated;
+  }, []); // Dependencies are passed explicitly
+
   // Revalidate poles when KMZ data changes
   useEffect(() => {
     // Skip validation if no poles or no KMZ data
     if (poles.length === 0 || kmzFiberData.length === 0) return;
-    
-    // Re-run validation with KMZ data
-    const revalidatedPoles = validatePoleData({ poles, projectInfo }, kmzFiberData);
+
+    console.log("Revalidating poles due to KMZ data change...");
+    const revalidatedPoles = runValidation(poles, projectInfo, kmzFiberData);
     setPoles(revalidatedPoles);
-  }, [kmzFiberData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kmzFiberData]); // Only re-run when KMZ data changes (runValidation is stable)
+
 
   const handleFileLoaded = async (jsonData: Record<string, unknown>) => {
     setIsProcessing(true);
-    
+    setDesignComparisonResults(null); // Reset comparison results on new file load
+
     try {
-      // Store the original JSON data for later use when saving changes
+      // Store the original JSON data
       setOriginalJsonData(jsonData);
-      
-      // Extract pole data and project info from the JSON
+
+      // Extract pole data and project info
       const parsedData = extractPoleData(jsonData);
-      
-      // Store project info separately
-      setProjectInfo(parsedData.projectInfo);
-      
-      // Validate the extracted data with the project info
-      const validatedPoles = validatePoleData(parsedData);
-      
-      // Update state with the processed poles
-      setPoles(validatedPoles);
+      setProjectInfo(parsedData.projectInfo); // Store project info
+
+      // Initial validation (without KMZ data initially)
+      const validatedPoles = runValidation(parsedData.poles, parsedData.projectInfo, []);
+      setPoles(validatedPoles); // Update state with initially validated poles
+
+      // --- Perform Design Comparison ---
+      // Check if both Proposed and Remedy layers exist in the data
+      const hasProposed = validatedPoles.some(p => p.layers['Proposed']);
+      const hasRemedy = validatedPoles.some(p => p.layers['Remedy']);
+
+      if (hasProposed && hasRemedy) {
+        console.log("Found Proposed and Remedy layers, performing comparison...");
+        // Create temporary ParsedData structures for comparison function
+        const createLayerSpecificData = (layerName: string): ParsedData => ({
+          projectInfo: parsedData.projectInfo,
+          poles: validatedPoles
+            .filter(p => p.layers[layerName]) // Only include poles that have this layer
+            .map(p => ({
+              ...p,
+              // Keep only the specific layer for this structure
+              layers: { [layerName]: p.layers[layerName] } as Record<string, PoleLayer>
+            }))
+        });
+
+        const proposedLayerData = createLayerSpecificData('Proposed');
+        const remedyLayerData = createLayerSpecificData('Remedy');
+
+        // Run the comparison
+        const comparisonResults = compareDesigns(proposedLayerData, remedyLayerData);
+        setDesignComparisonResults(comparisonResults);
+        console.log("Comparison complete:", comparisonResults);
+      } else {
+        console.log("Proposed and/or Remedy layers not found. Skipping comparison.");
+      }
+      // --- End Design Comparison ---
+
+
       setFileUploaded(true);
     } catch (err) {
       console.error("Error processing file:", err);
+      // TODO: Add user-facing error message
     } finally {
       setIsProcessing(false);
     }
@@ -90,11 +135,12 @@ const Index = () => {
             
             <Separator />
             
-            <Results 
-              poles={poles} 
+            <Results
+              poles={poles}
               originalJsonData={originalJsonData}
               kmzFiberData={kmzFiberData}
               onKmzDataParsed={setKmzFiberData}
+              designComparisonResults={designComparisonResults} // Pass comparison results
             />
           </div>
         )}

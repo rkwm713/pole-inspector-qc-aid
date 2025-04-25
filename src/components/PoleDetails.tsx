@@ -2,20 +2,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pole, WireEndPoint } from "@/types";
+import { SPIDAcalcData } from "@/utils/dataCorrections";
 import { AttachmentTable } from "./AttachmentTable";
 import { WireTable } from "./WireTable";
 import { WireEndPointsTable } from "./WireEndPointsTable";
 import { PolePropertiesCard } from "./PolePropertiesCard";
 import { ClearanceResultsTable } from "./ClearanceResultsTable";
 import { QCResultsCard } from "./QCResultsCard";
+import { WireEndPointOrderCard } from "./WireEndPointOrderCard";
 import { Separator } from "@/components/ui/separator";
 
 interface PoleDetailsProps {
   pole: Pole;
   onEnvironmentChange?: (poleId: string, wepId: string, layerName: string, newEnvironment: string) => void;
+  jsonData?: SPIDAcalcData;
+  onJsonDataUpdate?: (updatedData: SPIDAcalcData) => void;
 }
 
-export function PoleDetails({ pole, onEnvironmentChange }: PoleDetailsProps) {
+export function PoleDetails({ pole, onEnvironmentChange, jsonData, onJsonDataUpdate }: PoleDetailsProps) {
   // Debug logging
   if (pole.structureId === "H14C378") {
     console.log("PoleDetails - Found H14C378 pole");
@@ -106,7 +110,21 @@ export function PoleDetails({ pole, onEnvironmentChange }: PoleDetailsProps) {
       })()}
       
       {/* QC Results Card */}
-      <QCResultsCard results={pole.qcResults} />
+      <QCResultsCard 
+        results={pole.qcResults} 
+        jsonData={jsonData} 
+        onDataUpdate={onJsonDataUpdate} 
+      />
+      
+      {/* Wire End Point Order Check Card - Displayed separately */}
+      {pole.qcResults?.wireEndPointOrderCheck && (
+        <WireEndPointOrderCard
+          checkResult={pole.qcResults.wireEndPointOrderCheck}
+          poleStructureId={pole.structureId}
+          jsonData={jsonData}
+          onDataUpdate={onJsonDataUpdate}
+        />
+      )}
       
       {/* Design Layers */}
       {sortedLayerKeys.length > 0 ? (

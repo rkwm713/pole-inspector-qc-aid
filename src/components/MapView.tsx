@@ -376,8 +376,9 @@ export function MapView({
         // Store locally and pass up to parent component
         setKmzFiberData(fiberData);
         
-        if (onKmzDataParsed && fiberData.length > 0) {
-          onKmzDataParsed(fiberData);
+        // Always call the callback to notify the parent, even if fiberData is empty
+        if (onKmzDataParsed) { 
+          onKmzDataParsed(fiberData); 
         }
       } catch (error) {
         console.error('Error parsing KMZ/KML file:', error);
@@ -423,12 +424,15 @@ export function MapView({
   // Function to extract fiber data from GeoJSON layer
   const extractFiberDataFromLayer = (layer: L.Layer): KmzFiberData[] => {
     const fiberData: KmzFiberData[] = [];
+    let featureCount = 0; // Added counter
+    console.log("MapView: Starting KMZ fiber data extraction..."); 
     
     // Check if layer has eachLayer method (like a GeoJSON layer)
     if ('eachLayer' in layer) {
       const geoJsonLayer = layer as L.GeoJSON;
       
       geoJsonLayer.eachLayer((featureLayer: L.Layer) => {
+        featureCount++; // Increment counter
         if ('feature' in featureLayer) {
           // Define proper types for GeoJSON features
           interface GeoJSONGeometry {
@@ -590,6 +594,17 @@ export function MapView({
             poleId = props.poleId;
           }
           
+          // Log extracted properties for debugging
+          console.log(`MapView: Extracting feature ${featureCount}:`, { 
+            geometryType: feature.geometry.type, 
+            hasCoords: !!coordinates, 
+            props: props, // Log all properties found
+            extractedFiberSize: fiberSize,
+            extractedFiberCount: fiberCount,
+            extractedPoleId: poleId,
+            extractedCbCapafo: cbCapafo
+          });
+
           // Always add to dataset if we have coordinates - we need all possible data for QC
           if (coordinates) {
             // Create a special property to store cb_capafo if it exists
@@ -597,18 +612,27 @@ export function MapView({
               props.cb_capafo = cbCapafo;
             }
             
-            fiberData.push({
+            const extractedData: KmzFiberData = {
               poleId,
               coordinates,
               fiberSize: fiberSize || cbCapafo || '',
               fiberCount: fiberCount || parseInt(cbCapafo || '0', 10) || 0,
               description: props.description,
-            });
+            };
+            fiberData.push(extractedData);
+            // console.log("MapView: Added fiber data:", extractedData); // Optional: Log added data
+          } else {
+            console.log(`MapView: Skipping feature ${featureCount} due to missing coordinates.`);
           }
+        } else {
+           console.log(`MapView: Skipping layer ${featureCount}, does not have 'feature' property.`);
         }
       });
+    } else {
+      console.log("MapView: KMZ layer does not have 'eachLayer' method.");
     }
     
+    console.log(`MapView: Finished KMZ extraction. Found ${fiberData.length} features with fiber data out of ${featureCount} total features.`);
     return fiberData;
   };
   

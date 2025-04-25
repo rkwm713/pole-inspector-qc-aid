@@ -1,15 +1,18 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react"; // Removed useMemo for now
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pole, ValidationResults, QCCheckStatus, KmzFiberData } from "@/types";
+import { Pole, ValidationResults, QCCheckStatus, KmzFiberData, DesignComparisonResults } from "@/types"; // Added DesignComparisonResults
 import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
 import { QCSummary } from "./QCSummary";
 import { FiberComparisonTable, FiberSizeChange } from "./FiberComparisonTable";
+import { SpanComparisonTable } from "./SpanComparisonTable"; // Import the new component
+import { SPIDAcalcData, correctWireEndPointOrderForAllLocations } from "@/utils/dataCorrections";
+import { WireEndPointOrderCheckTable } from "./WireEndPointOrderCheckTable";
 import { AlertCircle, AlertTriangle, Check, Download, FileUp, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator"; // Separator seems unused here
 import { Button } from "./ui/button";
 
 interface ResultsProps {
@@ -18,6 +21,7 @@ interface ResultsProps {
   originalJsonData?: Record<string, unknown>;
   kmzFiberData?: KmzFiberData[];
   onKmzDataParsed?: (data: KmzFiberData[]) => void;
+  designComparisonResults?: DesignComparisonResults | null; // Added prop for comparison results
 }
 
 // Interfaces for SPIDAcalc JSON structure
@@ -59,25 +63,43 @@ interface EnvironmentChange {
   newEnvironment: string;
 }
 
-export function Results({ poles: initialPoles, validationResults, originalJsonData, kmzFiberData, onKmzDataParsed }: ResultsProps) {
+export function Results({
+  poles: initialPoles,
+  validationResults,
+  originalJsonData,
+  kmzFiberData,
+  onKmzDataParsed,
+  designComparisonResults // Added prop
+}: ResultsProps) {
   const [poles, setPoles] = useState<Pole[]>(initialPoles);
   const [selectedPoleId, setSelectedPoleId] = useState<string | undefined>(
-    poles.length > 0 ? poles[0].structureId : undefined
+    initialPoles.length > 0 ? initialPoles[0].structureId : undefined // Use initialPoles here
   );
-  
+
   // Keep track of all environment changes
   const [environmentChanges, setEnvironmentChanges] = useState<EnvironmentChange[]>([]);
   // Keep track of fiber size changes
   const [fiberSizeChanges, setFiberSizeChanges] = useState<FiberSizeChange[]>([]);
+  // Keep track of wire end point order check summary
+  const [wepOrderSummary, setWepOrderSummary] = useState<Array<{ locationLabel: string; status: string; message?: string }> | null>(null);
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
-  // Tabs for switching between QC overview, pole details, and fiber comparison
+  // Tabs for switching between QC overview, pole details, fiber comparison, and corrections
   const [activeTab, setActiveTab] = useState<string>("overview");
 
   // Update local poles state when props change
   useEffect(() => {
     setPoles(initialPoles);
   }, [initialPoles]);
+
+  // Run wire end point order correction when originalJsonData changes
+  useEffect(() => {
+    if (originalJsonData) {
+      const { summary } = correctWireEndPointOrderForAllLocations(originalJsonData as SPIDAcalcData);
+      setWepOrderSummary(summary);
+    }
+  }, [originalJsonData]);
 
   const handlePoleSelect = (poleId: string) => {
     setSelectedPoleId(poleId);
@@ -134,28 +156,28 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
     setHasUnsavedChanges(true);
   }, []);
 
-  // Generate updated JSON with environment and fiber size changes
+  // Generate updated JSON with environment, fiber size, and WEP order changes
   const generateUpdatedJson = () => {
     if (!originalJsonData) return null;
-    
-    // Create a deep copy of the original JSON data
-    const updatedJson = JSON.parse(JSON.stringify(originalJsonData));
-    
+
+    // Start with the data corrected for WEP order
+    const { correctedData: updatedJson } = correctWireEndPointOrderForAllLocations(originalJsonData as SPIDAcalcData);
+
     // Apply all environment changes to the JSON
     environmentChanges.forEach(change => {
       const { poleId, wepId, newEnvironment } = change;
-      
+
       // Find the pole in the JSON
       // The exact path depends on the JSON structure, but likely resembles:
       // updatedJson.leads[0].locations[poleIndex].designs[layerIndex]...
-      
+
       // This would need to be customized based on the actual structure:
       if (updatedJson.leads && Array.isArray(updatedJson.leads) && updatedJson.leads.length > 0) {
         const locations = updatedJson.leads[0].locations;
         if (Array.isArray(locations)) {
           // Find the pole by its ID/structureId
           const poleIndex = locations.findIndex((loc: SPIDALocation) => loc.label === poleId || loc.id === poleId);
-          
+
           if (poleIndex !== -1) {
             const designs = locations[poleIndex].designs;
             if (Array.isArray(designs)) {
@@ -182,11 +204,11 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
         }
       }
     });
-    
+
     // Apply all fiber size changes to the JSON
     fiberSizeChanges.forEach(change => {
       const { fromPoleLabel, toPoleLabel, designLayer, newFiberSize, wireIds } = change;
-      
+
       // Find the pole in the JSON
       if (updatedJson.leads && Array.isArray(updatedJson.leads) && updatedJson.leads.length > 0) {
         const locations = updatedJson.leads[0].locations;
@@ -195,7 +217,7 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
           const poleIndex = locations.findIndex(
             (loc: SPIDALocation) => loc.label === fromPoleLabel || loc.id === fromPoleLabel
           );
-          
+
           if (poleIndex !== -1) {
             const designs = locations[poleIndex].designs;
             if (Array.isArray(designs)) {
@@ -203,28 +225,28 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
               const designIndex = designs.findIndex(
                 d => d.label === designLayer || d.label === designLayer.toLowerCase()
               );
-              
+
               if (designIndex !== -1 && designs[designIndex].structure?.wires) {
                 // Update each wire in the wireIds array
                 wireIds.forEach(wireId => {
                   const wireIndex = designs[designIndex].structure.wires.findIndex(
                     (w: SPIDAWire) => w.id === wireId
                   );
-                  
+
                   if (wireIndex !== -1) {
                     const wire = designs[designIndex].structure.wires[wireIndex];
-                    
+
                     // Update the fiber size in the appropriate field
                     // We'll update all possible fields where size might be stored
                     if (wire.clientItem) {
                       wire.clientItem.size = newFiberSize;
                     }
                     wire.size = newFiberSize;
-                    
+
                     // Update description if it contains fiber size information
-                    if (wire.description && 
-                        (wire.description.includes('fiber') || 
-                         wire.description.includes('ct') || 
+                    if (wire.description &&
+                        (wire.description.includes('fiber') ||
+                         wire.description.includes('ct') ||
                          wire.description.includes('fbr'))) {
                       wire.description = newFiberSize;
                     }
@@ -236,7 +258,7 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
         }
       }
     });
-    
+
     return updatedJson;
   };
 
@@ -315,8 +337,17 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
             <TabsTrigger value="fiber" className="px-6">
               Fiber Comparison
             </TabsTrigger>
+            <TabsTrigger value="fiber" className="px-6">
+              Fiber Comparison
+            </TabsTrigger>
+            <TabsTrigger value="span-comparison" className="px-6"> {/* New Tab */}
+              Span Comparison
+            </TabsTrigger>
+            <TabsTrigger value="corrections" className="px-6">
+              Corrections
+            </TabsTrigger>
           </TabsList>
-          
+
           <div className="text-sm text-muted-foreground">
             Analyzed {poles.length} pole{poles.length !== 1 ? 's' : ''}
           </div>
@@ -325,7 +356,23 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
         <TabsContent value="overview" className="space-y-4 mt-0">
           <QCSummary poles={poles} />
         </TabsContent>
-        
+
+        <TabsContent value="span-comparison" className="mt-0"> {/* New Tab Content */}
+          {designComparisonResults ? (
+            <SpanComparisonTable results={designComparisonResults} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Span Comparison</CardTitle>
+                <CardDescription>Proposed vs. Remedy Layer Span Analysis</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Comparison data not available. Ensure the uploaded file contains both 'Proposed' and 'Remedy' layers.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="fiber" className="mt-0">
           <Card className="mb-4">
             <CardHeader>
@@ -349,7 +396,7 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
                           const dataTransfer = new DataTransfer();
                           dataTransfer.items.add(e.target.files[0]);
                           mapViewFileInput.files = dataTransfer.files;
-                          
+
                           // Dispatch a change event
                           const event = new Event('change', { bubbles: true });
                           mapViewFileInput.dispatchEvent(event);
@@ -369,11 +416,11 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
                     {kmzFiberData && kmzFiberData.length > 0 ? 'Change KML/KMZ File' : 'Upload KML/KMZ File'}
                   </Button>
                 </div>
-                
+
                 {kmzFiberData && kmzFiberData.length > 0 ? (
-                  <FiberComparisonTable 
-                    poles={poles} 
-                    kmzData={kmzFiberData} 
+                  <FiberComparisonTable
+                    poles={poles}
+                    kmzData={kmzFiberData}
                     originalJsonData={originalJsonData}
                     onFiberSizeChange={handleFiberSizeChange}
                   />
@@ -386,7 +433,11 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
             </CardContent>
           </Card>
         </TabsContent>
-        
+
+        <TabsContent value="corrections" className="mt-0">
+          {wepOrderSummary && <WireEndPointOrderCheckTable summary={wepOrderSummary} />}
+        </TabsContent>
+
         <TabsContent value="details" className="mt-0">
           {/* Save/Download button for environment changes */}
               {(hasUnsavedChanges || fiberSizeChanges.length > 0) && (
@@ -445,7 +496,7 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
                               </div>
                             )}
                           </div>
-                          
+
                           {pole.qcResults?.overallStatus && pole.qcResults.overallStatus !== "NOT_CHECKED" && (
                             <Badge variant={getStatusBadgeVariant(pole.qcResults.overallStatus)}>
                               <div className="flex items-center">
@@ -478,9 +529,42 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
 
           {selectedPole ? (
             <div className="mt-6">
-              <PoleDetails 
-                pole={selectedPole} 
+              <PoleDetails
+                pole={selectedPole}
                 onEnvironmentChange={handleEnvironmentChange}
+                jsonData={originalJsonData as SPIDAcalcData}
+                onJsonDataUpdate={(updatedData) => {
+                  // When the JSON is updated from the QCResultsCard, update the originalJsonData
+                  // and set hasUnsavedChanges to true
+                  setHasUnsavedChanges(true);
+
+                  // Create a new PoleDetails function to handle wireEndPoint order changes
+                  const updatedPoles = [...poles];
+                  const selectedPoleIndex = updatedPoles.findIndex(p => p.structureId === selectedPole.structureId);
+
+                  if (selectedPoleIndex >= 0) {
+                    // Update the status of the wireEndPointOrderCheck
+                    const updatedPole = { ...updatedPoles[selectedPoleIndex] };
+                    if (updatedPole.qcResults?.wireEndPointOrderCheck) {
+                      updatedPole.qcResults.wireEndPointOrderCheck = {
+                        ...updatedPole.qcResults.wireEndPointOrderCheck,
+                        status: "PASS",
+                        message: "WireEndPoints order is consistent between PROPOSED and REMEDY designs",
+                        details: ["Order has been corrected"]
+                      };
+
+                      // Update the overall QC result if needed
+                      if (updatedPole.qcResults.failCount > 0) {
+                        updatedPole.qcResults.failCount--;
+                        updatedPole.qcResults.passCount++;
+                      }
+
+                      // Update the pole in the poles array
+                      updatedPoles[selectedPoleIndex] = updatedPole;
+                      setPoles(updatedPoles);
+                    }
+                  }
+                }}
               />
             </div>
           ) : (
