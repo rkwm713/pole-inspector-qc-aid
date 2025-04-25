@@ -7,7 +7,7 @@ import { PoleDetails } from "./PoleDetails";
 import { MapView } from "./MapView";
 import { QCSummary } from "./QCSummary";
 import { FiberComparisonTable, FiberSizeChange } from "./FiberComparisonTable";
-import { AlertCircle, AlertTriangle, Check, Download, Save } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Download, FileUp, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "./ui/button";
@@ -335,18 +335,54 @@ export function Results({ poles: initialPoles, validationResults, originalJsonDa
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {kmzFiberData && kmzFiberData.length > 0 ? (
-                <FiberComparisonTable 
-                  poles={poles} 
-                  kmzData={kmzFiberData} 
-                  originalJsonData={originalJsonData}
-                  onFiberSizeChange={handleFiberSizeChange}
-                />
-              ) : (
-                <div className="text-center p-4 text-muted-foreground">
-                  <p>No KMZ data available. Please upload a KMZ file using the button in the map view.</p>
+              <div>
+                <div className="mb-4 flex items-center justify-end">
+                  <input
+                    type="file"
+                    id="kmz-file-upload"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        // Get a reference to the hidden file input in MapView
+                        const mapViewFileInput = document.getElementById('map-kmz-file-upload') as HTMLInputElement;
+                        if (mapViewFileInput) {
+                          // Create a new FileList object
+                          const dataTransfer = new DataTransfer();
+                          dataTransfer.items.add(e.target.files[0]);
+                          mapViewFileInput.files = dataTransfer.files;
+                          
+                          // Dispatch a change event
+                          const event = new Event('change', { bubbles: true });
+                          mapViewFileInput.dispatchEvent(event);
+                        }
+                      }
+                    }}
+                    accept=".kml,.kmz"
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('kmz-file-upload')?.click()}
+                    className="text-xs flex items-center gap-1"
+                  >
+                    <FileUp className="h-3 w-3" />
+                    {kmzFiberData && kmzFiberData.length > 0 ? 'Change KML/KMZ File' : 'Upload KML/KMZ File'}
+                  </Button>
                 </div>
-              )}
+                
+                {kmzFiberData && kmzFiberData.length > 0 ? (
+                  <FiberComparisonTable 
+                    poles={poles} 
+                    kmzData={kmzFiberData} 
+                    originalJsonData={originalJsonData}
+                    onFiberSizeChange={handleFiberSizeChange}
+                  />
+                ) : (
+                  <div className="text-center p-4 text-muted-foreground">
+                    <p>No KMZ data available. Please upload a KMZ file using the button above.</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -200,6 +200,7 @@ export function MapView({
   // State for KMZ layer and data viewer
   const [kmzLayer, setKmzLayer] = useState<L.Layer | null>(null);
   const [isKmzLoaded, setIsKmzLoaded] = useState<boolean>(false);
+  const [isKmzVisible, setIsKmzVisible] = useState<boolean>(true);
   const [kmzLoadError, setKmzLoadError] = useState<string | null>(null);
   const [kmzFileName, setKmzFileName] = useState<string | null>(null);
   const [kmzFiberData, setKmzFiberData] = useState<KmzFiberData[]>([]);
@@ -626,40 +627,38 @@ export function MapView({
           <div className="flex items-center gap-4">
             <CardTitle className="text-lg">Pole Locations</CardTitle>
             
-              {/* KMZ upload button */}
-              <div className="flex items-center">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleKmzFileUpload}
-                  accept=".kml,.kmz"
-                  className="hidden"
-                />
+              {/* KMZ layer toggle button (only if KMZ is loaded) */}
+              {isKmzLoaded && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={openFileDialog}
-                  disabled={poles.length === 0}
+                  onClick={() => {
+                    setIsKmzVisible(!isKmzVisible);
+                    if (kmzLayer && mapRef.current) {
+                      if (isKmzVisible) {
+                        mapRef.current.removeLayer(kmzLayer);
+                      } else {
+                        kmzLayer.addTo(mapRef.current);
+                      }
+                    }
+                  }}
                   className="text-xs flex items-center gap-1"
                 >
-                  <FileUp className="h-3 w-3" />
-                  {isKmzLoaded ? 'Change KML/KMZ File' : 'Upload KML/KMZ File'}
+                  {isKmzVisible ? 'Hide KML Layer' : 'Show KML Layer'}
                 </Button>
-                
-                {kmzFileName && (
-                  <div className="flex items-center ml-2">
-                    <span className="text-xs text-gray-500">
-                      KMZ/KML File: {kmzFileName}
-                    </span>
-                  </div>
-                )}
-                
-                {kmzLoadError && (
-                  <span className="ml-2 text-xs text-red-500">
-                    Error: {kmzLoadError}
-                  </span>
-                )}
-              </div>
+              )}
+          </div>
+          
+          {/* KMZ upload button - hidden but keep it for functionality */}
+          <div className="flex items-center">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleKmzFileUpload}
+              accept=".kml,.kmz"
+              className="hidden"
+              id="map-kmz-file-upload"
+            />
           </div>
           
           {/* Environment status summary indicator */}
